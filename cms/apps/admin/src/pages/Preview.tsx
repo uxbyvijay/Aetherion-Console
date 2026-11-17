@@ -49,6 +49,7 @@ function siteUrlFor(base: string, type: ContentType, slug: string) {
 export function Preview({ site, type, data, sections, slug, status, selectedKey, selectedPath, onSelectPath, onNavigate }: Props) {
   const [mobile, setMobile] = useState(false); // Desktop (the full width) or Mobile (a phone-sized frame)
   const [edit, setEdit] = useState(true);
+  useEffect(() => { const again = () => setReload((n) => n + 1); window.addEventListener('cms:show-preview', again); return () => window.removeEventListener('cms:show-preview', again); }, []);
   const [reload, setReload] = useState(0);
   const url = site.previewUrl ? siteUrlFor(site.previewUrl, type, slug) : null;
 

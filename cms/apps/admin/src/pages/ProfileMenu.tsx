@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Site, User } from '../api';
 import { initialsOf, shownEmail } from '../lib/people';
+import { ChangePassword } from './ChangePassword';
 import { clearProfilePic, saveProfilePic, useProfilePic } from '../lib/profilePic';
 
 export function Avatar({ user, size = 30 }: { user: User; size?: number }) {
@@ -16,6 +17,7 @@ export function Avatar({ user, size = 30 }: { user: User; size?: number }) {
 export function ProfileMenu({ user, site, onSignOut }: { user: User; site?: Site; onSignOut: () => void }) {
   const [open, setOpen] = useState(false);
   const [err, setErr] = useState('');
+  const [changing, setChanging] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const file = useRef<HTMLInputElement>(null);
   const pic = useProfilePic(user.id);
@@ -55,7 +57,7 @@ export function ProfileMenu({ user, site, onSignOut }: { user: User; site?: Site
             </span>
             <b className="pp-name">{user.name}</b>
             <span className="pp-mail">{shownEmail(user.email)}</span>
-            <span className="pp-tag">{user.isSuperAdmin ? 'Super admin' : 'Team member'}</span>
+            <span className="pp-tag">{user.isSuperAdmin ? 'Admin' : 'Team member'}</span>
           </div>
           <input ref={file} type="file" accept="image/*" hidden onChange={(e) => pick(e.target.files?.[0])} />
           {err && <p className="err pp-err">{err}</p>}
@@ -65,6 +67,10 @@ export function ProfileMenu({ user, site, onSignOut }: { user: User; site?: Site
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="m6 6 1 14h10l1-14" /></svg>
               Remove picture
             </button></li>}
+            <li><button onClick={() => { setOpen(false); setChanging(true); }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="4" y="11" width="16" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>
+              Change password
+            </button></li>
             <li><button className="pp-signout" onClick={onSignOut}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="m16 17 5-5-5-5" /><path d="M21 12H9" /></svg>
               Log out
@@ -72,6 +78,7 @@ export function ProfileMenu({ user, site, onSignOut }: { user: User; site?: Site
           </ul>
         </div>
       )}
+      {changing && <ChangePassword onDone={() => setChanging(false)} onClose={() => setChanging(false)} />}
     </div>
   );
 }

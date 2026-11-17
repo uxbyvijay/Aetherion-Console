@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { leaveThen } from './lib/dirty';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, getToken, setToken, type Site, type User } from './api';
 import { Login } from './pages/Login';
+import { ChangePassword } from './pages/ChangePassword';
 import { Structure } from './pages/Structure';
 import { LivePreview } from './pages/LivePreview';
 import { Types } from './pages/Types';
@@ -30,18 +32,40 @@ export default function App() {
   const [aiOpen, toggleAi] = useAiOpen();
   const versions = useHistoryTarget(); // the document open in Structure or Live preview, when it has been saved
   const [versionsOpen, setVersionsOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const viewRef = useRef<View>('structure');
+  viewRef.current = view;
   const [back, setBack] = useState<View>('structure'); // where Settings goes back to: the screen you opened it from
+  /** Settings is a page of its own. Opening it remembers the screen to go back to. */
+  const openSettings = () => { const v = viewRef.current; if (v === 'settings') return; setBack(v === 'preview' ? 'preview' : 'structure'); setView('settings'); setVersionsOpen(false); };
+  // LinkedIn sends the person back here after they allow (or refuse) the connection
+  const [liNotice, setLiNotice] = useState<{ ok: boolean; message: string } | undefined>(() => {
+    const q = new URLSearchParams(location.search);
+    const r = q.get('linkedin');
+    if (!r) return undefined;
+    history.replaceState(null, '', location.pathname);
+    return r === 'connected' ? { ok: true, message: 'LinkedIn is connected. You can now post articles.' } : { ok: false, message: q.get('reason') || 'LinkedIn could not be connected.' };
+  });
+  useEffect(() => { if (liNotice) openSettings(); }, [liNotice]);
+  // other screens can ask for Settings to open (for example the LinkedIn post dialog, when LinkedIn is not set up yet)
+  useEffect(() => {
+    const open = () => openSettings();
+    const preview = () => { setVersionsOpen(false); setView('preview'); };
+    window.addEventListener('cms:open-settings', open);
+    const openEntry = () => { setVersionsOpen(false); setView('structure'); };
+    window.addEventListener('cms:show-preview', preview);
+    window.addEventListener('cms:open-entry', openEntry);
+    return () => { window.removeEventListener('cms:open-settings', open); window.removeEventListener('cms:show-preview', preview); window.removeEventListener('cms:open-entry', openEntry); };
+  }, []);
   useEffect(() => { if (!versions) setVersionsOpen(false); }, [versions]);
   useEffect(() => {
-    if (view !== 'settings' && !settingsOpen) return;
+    if (view !== 'settings') return;
     const onKey = (e: KeyboardEvent) => {
       const typing = (e.target as HTMLElement | null)?.closest?.('input, textarea, select');
-      if (e.key === 'Escape' && !typing && !document.querySelector('.dialog')) { if (settingsOpen) setSettingsOpen(false); else setView(back); }
+      if (e.key === 'Escape' && !typing && !document.querySelector('.dialog')) setView(back);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [view, back, settingsOpen]); // nothing open to show the history of (for example in Settings)
+  }, [view, back]); // nothing open to show the history of (for example in Settings)
 
   const loadSites = useCallback(async () => {
     const s = await api<Site[]>('/sites');
@@ -106,24 +130,27 @@ export default function App() {
     return <Login onDone={(u) => { setUser(u); setReady(true); loadSites(); }} />;
   }
 
+  // first sign-in with a temporary password: nothing else until the person has chosen their own
+  if (user.mustChangePassword) return <ChangePassword forced onDone={setUser} onSignOut={() => { setToken(null); location.reload(); }} />;
+
   const site = sites.find((s) => s.id === siteId);
   const canAdmin = site?.role === 'ADMIN';
   const canEdit = site?.role !== 'VIEWER';
   const workspace = view === 'structure' || view === 'preview';
-  const toggleSettings = () => { if (!site) { setView(view === 'settings' ? 'structure' : 'settings'); return; } setSettingsOpen((o) => { if (!o) setVersionsOpen(false); return !o; }); };
+  const toggleSettings = () => { if (view === 'settings') { setView(back); return; } leaveThen(openSettings); };
 
   return (
     <div className="app">
       <header className="topbar">
         <div className="top-left">
           <strong className="brand">Synx Brain</strong>
-          <select className="site-select" aria-label="Site" value={siteId} onChange={(e) => setSiteId(e.target.value)}>
+          <select className="site-select" aria-label="Site" value={siteId} onChange={(e) => { const id = e.target.value; leaveThen(() => setSiteId(id)); }}>
             {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             {!sites.length && <option value="">No sites</option>}
           </select>
         </div>
         <nav className="tabs">
-          {MAIN.map((t) => <button key={t.id} className={view === t.id ? 'on' : ''} onClick={() => setView(t.id)}>{t.label}</button>)}
+          {MAIN.map((t) => <button key={t.id} className={view === t.id ? 'on' : ''} onClick={() => { if (t.id !== view) leaveThen(() => setView(t.id)); }}>{t.label}</button>)}
         </nav>
         <div className="top-actions">
           {site && canEdit && (
@@ -133,13 +160,13 @@ export default function App() {
           )}
           <span className="top-sep" aria-hidden />
           {site && (
-            <button className={`top-icon${workspace && versionsOpen ? ' on' : ''}`} aria-label="Version history" aria-pressed={workspace && versionsOpen} disabled={!workspace || !versions} data-tip={workspace && versions ? 'Version history' : 'Open a saved page to see its version history'} onClick={() => { setSettingsOpen(false); setVersionsOpen((o) => !o); }}>
+            <button className={`top-icon${workspace && versionsOpen ? ' on' : ''}`} aria-label="Version history" aria-pressed={workspace && versionsOpen} disabled={!workspace || !versions} data-tip={workspace && versions ? 'Version history' : 'Open a saved page to see its version history'} onClick={() => setVersionsOpen((o) => !o)}>
               <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 4v5h5" /><path d="M12 7.5V12l3 2" /></svg>
             </button>
           )}
-          {site && <NotificationsBell key={site.id} site={site} />}
+          {site && <NotificationsBell key={site.id} site={site} isAdmin={user.isSuperAdmin} />}
           {(
-            <button className={`top-icon${view === 'settings' || settingsOpen ? ' on' : ''}`} aria-label="Settings" aria-pressed={view === 'settings' || settingsOpen} data-tip={view === 'settings' || settingsOpen ? 'Close settings' : 'Settings'} onClick={toggleSettings}>
+            <button className={`top-icon${view === 'settings' ? ' on' : ''}`} aria-label="Settings" aria-pressed={view === 'settings'} data-tip={view === 'settings' ? 'Close settings' : 'Settings'} onClick={toggleSettings}>
               <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <circle cx="12" cy="12" r="3" />
                 <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
@@ -151,15 +178,7 @@ export default function App() {
       </header>
       {versionsOpen && versions && site && <History site={site} entryId={versions.entryId} name={versions.name} canEdit={versions.canEdit} onClose={() => setVersionsOpen(false)} onRestored={versions.onRestored} />}
 
-      {settingsOpen && site && (
-        <div className="settings-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setSettingsOpen(false); }}>
-          <div className="settings-modal" role="dialog" aria-modal="true" aria-label="Settings">
-          <Settings panel user={user} site={site} sites={sites} reload={loadSites} onSelect={setSiteId} onBack={() => setSettingsOpen(false)} />
-          </div>
-        </div>
-      )}
-
-      <main className={workspace ? 'full' : 'page'}>
+      <main className={workspace ? 'full' : view === 'settings' ? 'full settings-page' : 'page'}>
         {!site && view !== 'settings' ? (
           <p className="muted pad">{user.isSuperAdmin ? 'Create your first site under Settings.' : 'You have no site access yet. Ask an admin.'}</p>
         ) : workspace ? (
@@ -171,7 +190,7 @@ export default function App() {
         ) : view === 'media' ? (
           <MediaLibrary key={site!.id} site={site!} canEdit={canEdit} />
         ) : (
-          <Settings user={user} site={site} sites={sites} reload={loadSites} onSelect={setSiteId} onBack={() => setView(back)} backLabel={back === 'preview' ? 'Preview' : 'Structure'} />
+          <Settings notice={liNotice} user={user} site={site} sites={sites} reload={loadSites} onSelect={setSiteId} onBack={() => setView(back)} backLabel={back === 'preview' ? 'Preview' : 'Structure'} />
         )}
       </main>
     </div>

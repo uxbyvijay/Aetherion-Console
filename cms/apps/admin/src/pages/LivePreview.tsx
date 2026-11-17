@@ -11,6 +11,8 @@ import { setAtPath } from '../lib/path';
 import { setHistoryTarget } from '../lib/versions';
 import { getSelectedDoc } from '../lib/selection';
 import { ask } from '../lib/confirm';
+import { useReportDirty } from '../lib/dirty';
+import { firstText } from '../lib/titles';
 
 type Status = 'DRAFT' | 'PUBLISHED';
 type Draft = Partial<Entry> & { contentTypeId: string };
@@ -19,10 +21,6 @@ interface Doc { key: string; label: string; group: 'Pages' | 'Content'; type: Co
 const titleOf = (e: Partial<Entry>, t?: ContentType) => {
   const f = t?.fields.find((x) => x.type === 'text');
   return (f && (e.data?.[f.name] as string)) || e.slug || 'Untitled';
-};
-const firstText = (t: ContentType | undefined, d: Record<string, unknown>) => {
-  const f = t?.fields.find((x) => x.type === 'text');
-  return f ? String(d[f.name] ?? '') : '';
 };
 
 /**
@@ -117,6 +115,7 @@ function LiveEditor({ site, type, sectionTypes, entry, canEdit, onSaved, label, 
   const snapshot = (st: Status = status) => JSON.stringify([data, sections, slug, st]);
   const [baseline, setBaseline] = useState(snapshot);
   const dirty = snapshot() !== baseline;
+  useReportDirty(dirty);
   const def = (s: string) => sectionTypes.find((t) => t.slug === s);
 
   /** Sets one value by its edit path: "page.title", or "<sectionId>.items.1.text". */
@@ -169,11 +168,14 @@ function LiveEditor({ site, type, sectionTypes, entry, canEdit, onSaved, label, 
     if (sel !== 'page' && !r.sections.some((x) => x.id === sel)) setSel('page');
     return { lines: r.lines, changes: r.changes, undo: () => { setData(before.data); setSections(before.sections); } };
   };
-  const publish = async () => {
-    if (await ask({ title: 'Publish changes?', message: 'They go live on the site right away.', confirmLabel: 'Publish', tone: 'primary' })) save(true);
+  /** Asks first, then publishes. Tells the assistant how it went (nothing when the person said no). */
+  const publish = async (): Promise<{ ok: boolean; error?: string } | null> => {
+    if (!(await ask({ title: 'Publish changes?', message: 'They go live on the site right away.', confirmLabel: 'Publish', tone: 'primary' }))) return null;
+    const error = await save(true);
+    return error ? { ok: false, error } : { ok: true };
   };
 
-  async function save(publish = false) {
+  async function save(publish = false): Promise<string> {
     const next: Status = publish ? 'PUBLISHED' : status;
     setErr(''); setSaving(true); setSavedAt(false);
     try {
@@ -185,8 +187,9 @@ function LiveEditor({ site, type, sectionTypes, entry, canEdit, onSaved, label, 
       setSavedAt(true);
       setTimeout(() => setSavedAt(false), 2500);
       onSaved(saved);
-    } catch (x) { setErr((x as Error).message); }
+    } catch (x) { setErr((x as Error).message); setSaving(false); return (x as Error).message; }
     setSaving(false);
+    return '';
   }
 
   const current = sel === 'page' ? null : sections.find((s) => s.id === sel);

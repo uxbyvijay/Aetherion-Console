@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ask } from '../lib/confirm';
+import { leaveThen, useReportDirty } from '../lib/dirty';
+import { takeOpen } from '../lib/openEntry';
+import { LinkedinPost } from './LinkedinPost';
+import { isArticleType } from '../lib/articles';
 import { api, type ContentType, type Entry, type Site } from '../api';
 import { FieldForm } from './FieldInput';
 import { PageBuilder } from './PageBuilder';
@@ -59,6 +63,25 @@ export function Structure({ site, canEdit, goTypes }: { site: Site; canEdit: boo
     });
   }, [site.id]);
 
+  // The assistant made a draft and the person asked to open it
+  useEffect(() => {
+    const go = async () => {
+      if (!types) return;
+      const p = takeOpen();
+      if (!p) return;
+      const list = await reload();
+      const t = types.find((x) => x.slug === p.typeSlug);
+      const e = list.find((x) => x.id === p.id);
+      if (!t || !e) return;
+      setView({ t: 'type', typeId: t.id });
+      setFilter('ALL');
+      setSel(e);
+    };
+    go();
+    window.addEventListener('cms:open-entry', go);
+    return () => window.removeEventListener('cms:open-entry', go);
+  }, [types]);
+
   const pageTypes = types?.filter((t) => t.kind === 'page') ?? [];
   const sectionTypes = types?.filter((t) => t.kind === 'section') ?? [];
   const contentTypes = types?.filter((t) => t.kind !== 'page' && t.kind !== 'section') ?? [];
@@ -99,20 +122,25 @@ export function Structure({ site, canEdit, goTypes }: { site: Site; canEdit: boo
   // the Header or Footer an open page is listed under (it stays lit in the left list, and the page gets a way back)
   const openedFrom = view?.t === 'page' ? (footerPages.some((p) => p.id === view.id) ? 'footer' : undefined) : undefined;
   const openedFromType = openedFrom ? types?.find((x) => x.slug === openedFrom) : undefined;
-  const pageButton = (p: Entry, sub = false, tail?: ReactNode) => (
-    <button key={p.id} className={`tree-item${view?.t === 'page' && view.id === p.id ? ' on' : ''}${sub ? ' sub' : ''}`} onClick={() => setView({ t: 'page', id: p.id })}>
-      {iconFor(p.slug || titleOf(p, typeOf(p.contentTypeId)), 'page')}<span>{titleOf(p, typeOf(p.contentTypeId))}</span>
-      {p.status === 'DRAFT' && <i className="dot draft" title="Draft, not live" />}
-      {tail ?? <Chevron />}
-    </button>
-  );
+  const pageButton = (p: Entry, sub = false, tail?: ReactNode) => {
+    // a page that shows a list (Journals and its articles) is one entry: it opens the list, and the page's own heading is the first row there
+    const own = listOfPage(p);
+    const on = view?.t === 'page' ? view.id === p.id : !!own && view?.t === 'type' && view.typeId === own.id;
+    return (
+      <button key={p.id} className={`tree-item${on ? ' on' : ''}${sub ? ' sub' : ''}`} onClick={() => (own ? openType(own) : leaveThen(() => setView({ t: 'page', id: p.id })))}>
+        {iconFor(p.slug || titleOf(p, typeOf(p.contentTypeId)), 'page')}<span>{titleOf(p, typeOf(p.contentTypeId))}</span>
+        {!own && p.status === 'DRAFT' && <i className="dot draft" title="Draft, not live" />}
+        {tail ?? (own ? <><em className="tree-count">{entries.filter((e) => e.contentTypeId === own.id).length}</em><Chevron /></> : <Chevron />)}
+      </button>
+    );
+  };
 
   // Selecting a list type clears the selected document; a single document opens straight away.
-  const openType = (t: ContentType) => {
+  const openType = (t: ContentType) => leaveThen(() => {
     setView({ t: 'type', typeId: t.id });
     setFilter('ALL');
     setSel(t.kind === 'singleton' ? entries.find((e) => e.contentTypeId === t.id) ?? { contentTypeId: t.id, data: {}, status: 'DRAFT' } : null);
-  };
+  });
 
   if (types && !types.some((t) => t.kind !== 'section')) {
     return (
@@ -129,8 +157,8 @@ export function Structure({ site, canEdit, goTypes }: { site: Site; canEdit: boo
   const isList = activeType && activeType.kind !== 'singleton';
   const needle = q.trim().toLowerCase();
   const matches = (text: string) => text.toLowerCase().includes(needle);
-  const listButton = (t: ContentType) => (
-    <button key={t.id} className={`tree-item${view?.t === 'type' && view.typeId === t.id ? ' on' : ''}`} onClick={() => openType(t)}>
+  const listButton = (t: ContentType, sub = false) => (
+    <button key={t.id} className={`tree-item${view?.t === 'type' && view.typeId === t.id ? ' on' : ''}${sub ? ' sub' : ''}`} onClick={() => openType(t)}>
       {iconFor(t.slug, 'collection')}<span>{t.name}</span><em className="tree-count">{entries.filter((e) => e.contentTypeId === t.id).length}</em><Chevron />
     </button>
   );
@@ -141,6 +169,14 @@ export function Structure({ site, canEdit, goTypes }: { site: Site; canEdit: boo
   );
   // the page list: the tools sit under the page that opens them, and can be folded away
   const toolsOpen = folded[dropParent] !== false;
+  // A page and the list it shows (the Journals page and the Journal articles) are one thing for the person editing: the list is listed under its page
+  const words = (text: string) => text.toLowerCase().split(/[^a-z]+/).filter(Boolean).map((w) => w.replace(/s$/, ''));
+  const listOfPage = (p: Entry) => {
+    const own = words(titleOf(p, typeOf(p.contentTypeId)));
+    if (!own.length || own.length > 2) return undefined;
+    return lists.find((t) => { const w = words(t.name); return own.every((x) => w.includes(x)); });
+  };
+  const underPages = new Set(mainPages.map(listOfPage).filter((t): t is ContentType => !!t).map((t) => t.id));
   const pageTree = mainPages.filter((p) => !dropPages.includes(p)).flatMap((p) => {
     if (p.slug !== dropParent || !dropPages.length) return [pageButton(p)];
     const toggle = () => setFolded((o) => ({ ...o, [dropParent]: !toolsOpen }));
@@ -161,7 +197,7 @@ export function Structure({ site, canEdit, goTypes }: { site: Site; canEdit: boo
   const found = needle
     ? [
         ...pages.filter((p) => matches(titleOf(p, typeOf(p.contentTypeId))) || matches(p.slug ?? '')).map((p) => pageButton(p)),
-        ...lists.filter((t) => matches(t.name)).map(listButton),
+        ...lists.filter((t) => matches(t.name)).map((t) => listButton(t)),
         ...singles.filter((t) => matches(t.name)).map(singleButton),
       ]
     : [];
@@ -187,11 +223,11 @@ export function Structure({ site, canEdit, goTypes }: { site: Site; canEdit: boo
       <section className="pane pane-tree">
         <div className="pane-head">
           <h2 className="pane-title">Content</h2>
-          {canEdit && pageTypes.length > 0 && <button className="icon-btn" title="New page" aria-label="New page" onClick={() => setView({ t: 'new-page' })}>+</button>}
+          {canEdit && pageTypes.length > 0 && <button className="icon-btn" title="New page" aria-label="New page" onClick={() => leaveThen(() => setView({ t: 'new-page' }))}>+</button>}
         </div>
         <div className="tree-search">
           <svg className="ts-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
-          <input type="search" placeholder="Search pages and content" aria-label="Search pages and content" value={q} onChange={(e) => setQ(e.target.value)} />
+          <input type="search" placeholder="Search content" aria-label="Search pages and content" value={q} onChange={(e) => setQ(e.target.value)} />
           {q && <button className="ts-clear" onClick={() => setQ('')} aria-label="Clear search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6 6 18" /></svg></button>}
         </div>
         {needle ? (
@@ -203,10 +239,10 @@ export function Structure({ site, canEdit, goTypes }: { site: Site; canEdit: boo
               {pageTypes.length > 0 && !pages.length && <p className="muted pad">No pages yet. Use + to add one.</p>}
               {pageTree}
             </div>
-            {lists.length > 0 && (
+            {lists.some((t) => !underPages.has(t.id)) && (
               <>
                 <div className="tree-label"><span>Collections</span></div>
-                <div className="tree-group">{lists.map(listButton)}</div>
+                <div className="tree-group">{lists.filter((t) => !underPages.has(t.id)).map((t) => listButton(t))}</div>
               </>
             )}
             {singles.length > 0 && (
@@ -227,7 +263,7 @@ export function Structure({ site, canEdit, goTypes }: { site: Site; canEdit: boo
           onSaved={async (saved) => { await reload(); setView({ t: 'page', id: saved.id }); }}
           onDeleted={async () => { const list = await reload(); const next = list.find((e) => pageTypes.some((t) => t.id === e.contentTypeId)); setView(next ? { t: 'page', id: next.id } : null); }}
           onRestored={async () => { await reload(); setRk((k) => k + 1); }}
-          back={openedFromType ? { label: openedFromType.name, onClick: () => openType(openedFromType) } : undefined}
+          back={openedFromType ? { label: openedFromType.name, onClick: () => openType(openedFromType) } : pageEntry && listOfPage(pageEntry) ? { label: listOfPage(pageEntry)!.name, onClick: () => openType(listOfPage(pageEntry)!) } : undefined}
         />
       )}
 
@@ -250,7 +286,7 @@ export function Structure({ site, canEdit, goTypes }: { site: Site; canEdit: boo
           })}
           {pagesOf(container.slug).length > 0 && <p className="col-label">Pages in the {container.name.toLowerCase()}</p>}
           {pagesOf(container.slug).map((p) => (
-            <button key={p.id} className="doc-row" onClick={() => setView({ t: 'page', id: p.id })}>
+            <button key={p.id} className="doc-row" onClick={() => leaveThen(() => setView({ t: 'page', id: p.id }))}>
               {iconFor(p.slug || titleOf(p, typeOf(p.contentTypeId)), 'page')}<span className="doc-title">{titleOf(p, typeOf(p.contentTypeId))}</span>
               {p.status === 'DRAFT' && <span className="dot draft" title="Draft, not live" />}
             </button>
@@ -262,7 +298,7 @@ export function Structure({ site, canEdit, goTypes }: { site: Site; canEdit: boo
         <section className="pane pane-list">
           <div className="pane-head">
             <h2 className="pane-title">{activeType.name}</h2>
-            {canEdit && <button className="primary" onClick={() => setSel({ contentTypeId: activeType.id, data: {}, status: 'DRAFT' })}>New</button>}
+            {canEdit && <button className="primary" onClick={() => leaveThen(() => setSel({ contentTypeId: activeType.id, data: {}, status: 'DRAFT' }))}>New</button>}
           </div>
           <div className="chips">
             {(['ALL', 'PUBLISHED', 'DRAFT'] as const).map((f) => (
@@ -271,9 +307,17 @@ export function Structure({ site, canEdit, goTypes }: { site: Site; canEdit: boo
               </button>
             ))}
           </div>
+          {(() => {
+            const owner = mainPages.find((p) => listOfPage(p)?.id === activeType.id);
+            return owner ? (
+              <button className="doc-row page-row" onClick={() => leaveThen(() => setView({ t: 'page', id: owner.id }))}>
+                <span className="doc-title">{titleOf(owner, typeOf(owner.contentTypeId))} page: heading and intro</span><span /><span className="muted doc-date">Edit</span>
+              </button>
+            ) : null;
+          })()}
           {!listDocs.length && <p className="muted pad">{filter === 'ALL' ? 'No documents yet.' : 'Nothing matches this filter.'}</p>}
           {listDocs.map((e) => (
-            <button key={e.id} className={`doc-row${sel?.id === e.id ? ' on' : ''}`} onClick={() => setSel(e)}>
+            <button key={e.id} className={`doc-row${sel?.id === e.id ? ' on' : ''}`} onClick={() => leaveThen(() => setSel(e))}>
               <span className="doc-title">{titleOf(e, activeType)}</span>
               {/* the filter above already says which status this is, so the dot only shows when the list mixes both */}
               {filter === 'ALL' ? <span className={`dot ${e.status.toLowerCase()}`} title={e.status.toLowerCase()} /> : <span />}
@@ -317,11 +361,14 @@ function Editor({ site, type, entry, canEdit, onSaved, onDeleted, onRestored }: 
   const snapshot = (st = status) => JSON.stringify([data, slug, st]);
   const [baseline, setBaseline] = useState(snapshot);
   const dirty = snapshot() !== baseline;
+  useReportDirty(dirty);
+  const [li, setLi] = useState<{ text?: string } | null>(null);
+  const openSettings = () => { try { localStorage.setItem('cms_settings_section', 'linkedin'); } catch { /* ignore */ } window.dispatchEvent(new Event('cms:open-settings')); };
   const base = `/sites/${site.id}/entries`;
   const single = type.kind === 'singleton';
 
   /** Save keeps the status as it is; Publish saves and makes the document Published. */
-  async function save(publish = false) {
+  async function save(publish = false): Promise<string> {
     const next = publish ? 'PUBLISHED' : status;
     setErr(''); setSaving(true);
     try {
@@ -330,8 +377,9 @@ function Editor({ site, type, entry, canEdit, onSaved, onDeleted, onRestored }: 
       if (publish) setStatus('PUBLISHED');
       setBaseline(snapshot(next));
       onSaved(saved);
-    } catch (x) { setErr((x as Error).message); }
+    } catch (x) { setErr((x as Error).message); setSaving(false); return (x as Error).message; }
     setSaving(false);
+    return '';
   }
 
   const heading = single ? type.name : titleOf({ data, slug }, type) === 'Untitled' ? `New ${type.name}` : titleOf({ data, slug }, type);
@@ -360,8 +408,11 @@ function Editor({ site, type, entry, canEdit, onSaved, onDeleted, onRestored }: 
     setData(r.data);
     return { lines: r.lines, changes: r.changes, undo: () => setData(before) };
   };
-  const publish = async () => {
-    if (await ask({ title: 'Publish changes?', message: 'They go live on the site right away.', confirmLabel: 'Publish', tone: 'primary' })) save(true);
+  /** Asks first, then publishes. Tells the assistant how it went (nothing when the person said no). */
+  const publish = async (): Promise<{ ok: boolean; error?: string } | null> => {
+    if (!(await ask({ title: 'Publish changes?', message: 'They go live on the site right away.', confirmLabel: 'Publish', tone: 'primary' }))) return null;
+    const error = await save(true);
+    return error ? { ok: false, error } : { ok: true };
   };
 
   return (
@@ -374,6 +425,12 @@ function Editor({ site, type, entry, canEdit, onSaved, onDeleted, onRestored }: 
 {canEdit && status === 'PUBLISHED' && <button className="link unpublish" onClick={() => setStatus('DRAFT')}>Unpublish</button>}
         </div>
         <div className="grow" />
+        {canEdit && entry.id && isArticleType(type) && (
+          <span className="li-bar">
+            {typeof data.linkedinUrl === 'string' && data.linkedinUrl && <a className="link" href={data.linkedinUrl} target="_blank" rel="noreferrer">Posted on LinkedIn</a>}
+            <button disabled={dirty} title={dirty ? 'Save your changes first' : status !== 'PUBLISHED' ? 'Publish the article first' : 'Share this article on LinkedIn'} onClick={() => setLi({ text: undefined })}>Post to LinkedIn</button>
+          </span>
+        )}
         {canEdit && entry.id && !single && <button className="link delete-link" onClick={async () => { if (await ask({ title: 'Delete this document?', message: 'It is removed permanently and cannot be undone.', confirmLabel: 'Delete' })) { await api(`${base}/${entry.id}`, { method: 'DELETE' }); onDeleted(); } }}>Delete</button>}
         {canEdit && <button className={dirty ? 'dirty' : ''} title={dirty ? 'You have unsaved changes' : undefined} disabled={saving || !dirty} onClick={() => save()}>{saving ? 'Saving…' : 'Save'}</button>}
         {canEdit && <button className="primary" disabled={saving || !dirty} onClick={async () => { if (await ask({ title: 'Publish changes?', message: 'They go live on the site right away.', confirmLabel: 'Publish', tone: 'primary' })) save(true); }}>Publish</button>}
@@ -383,8 +440,13 @@ function Editor({ site, type, entry, canEdit, onSaved, onDeleted, onRestored }: 
     {canEdit && (
       <aside className="ai-drawer" hidden={!aiOpen}>
         <AgentPanel site={site} typeSlug={type.slug} active={aiOpen} onClose={toggleAi} apply={applyProposal} onPublish={publish}
-          getDoc={() => ({ data: live.current.data, sections: [], status })} />
+          getDoc={() => ({ data: live.current.data, sections: [], status })}
+          onLinkedin={entry.id && isArticleType(type) ? (text) => setLi({ text }) : undefined} />
       </aside>
+    )}
+    {li && entry.id && (
+      <LinkedinPost site={site} entryId={entry.id} initialText={li.text} onClose={() => setLi(null)} openSettings={openSettings}
+        onPosted={(url) => { if (url) setData((d) => ({ ...d, linkedinUrl: url })); setBaseline(JSON.stringify([{ ...data, linkedinUrl: url || data.linkedinUrl }, slug, status])); }} />
     )}
     </>
   );

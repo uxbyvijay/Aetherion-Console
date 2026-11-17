@@ -31,8 +31,8 @@ const words = (name: string, label: string) => list(name, label, [{ name: 'text'
 const tags = (name = 'tags', label = 'Tags on the picture') =>
   list(name, label, [
     { name: 'label', label: 'Label', type: 'text' },
-    { name: 'x', label: 'Left (%)', type: 'number' },
-    { name: 'y', label: 'Top (%)', type: 'number' },
+    { name: 'x', label: 'Left (%)', type: 'number', advanced: true },
+    { name: 'y', label: 'Top (%)', type: 'number', advanced: true },
   ]);
 const facts = (name = 'meta', label = 'Facts strip') =>
   list(name, label, [
@@ -114,9 +114,9 @@ export const skalleTypes: TypeDef[] = [
       img('image', 'Robot picture', { group: 'Picture' }),
       text('alt', 'Picture description', { group: 'Picture' }),
       list('parts', 'Part labels on the robot', [
-        { name: 'id', label: 'Label', type: 'text' },
-        { name: 'x', label: 'Left (%)', type: 'number' },
-        { name: 'y', label: 'Top (%)', type: 'number' },
+        { name: 'id', label: 'Label', type: 'text', advanced: true },
+        { name: 'x', label: 'Left (%)', type: 'number', advanced: true },
+        { name: 'y', label: 'Top (%)', type: 'number', advanced: true },
         { name: 'side', label: 'Label side', type: 'select', options: ['left', 'right'] },
       ], { group: 'Picture' }),
       text('scanTag', 'Scan tag', { group: 'Picture' }),
@@ -285,10 +285,10 @@ export const skalleTypes: TypeDef[] = [
       text('alt', 'Picture description', { group: 'Picture' }),
       text('caption', 'Picture caption', { group: 'Picture' }),
       list('tags', 'Tags on the pods', [
-        { name: 'id', label: 'Unit', type: 'text' },
+        { name: 'id', label: 'Unit', type: 'text', advanced: true },
         { name: 'label', label: 'Name shown', type: 'text' },
-        { name: 'x', label: 'Left (%)', type: 'number' },
-        { name: 'y', label: 'Top (%)', type: 'number' },
+        { name: 'x', label: 'Left (%)', type: 'number', advanced: true },
+        { name: 'y', label: 'Top (%)', type: 'number', advanced: true },
       ]),
     ],
   },
@@ -311,7 +311,7 @@ export const skalleTypes: TypeDef[] = [
       text('footSwitch', 'Footer: switch', { group: 'Name card' }),
       text('footFrom', 'Footer: from', { group: 'Name card' }),
       text('footTo', 'Footer: to', { group: 'Name card' }),
-      json('matrix', 'Dot pattern (rows of 1 and 0)', { group: 'Name card' }),
+      json('matrix', 'Dot pattern (rows of 1 and 0)', { group: 'Name card', advanced: true }),
       text('protoWord', 'Picture card: word', { group: 'Picture card' }),
       area('protoSpec', 'Picture card: small spec', { group: 'Picture card' }),
       img('protoImage', 'Picture', { group: 'Picture card' }),
@@ -326,7 +326,7 @@ export const skalleTypes: TypeDef[] = [
         { name: 'label', label: 'Label', type: 'text' },
         { name: 'value', label: 'Value', type: 'text' },
       ], { group: 'Spec card' }),
-      json('bars', 'Bar widths', { group: 'Spec card' }),
+      json('bars', 'Bar widths', { group: 'Spec card', advanced: true }),
       text('serial', 'Serial line', { group: 'Spec card' }),
       text('scopeTag', 'Scope: tag', { group: 'Scope card' }),
       text('scopeA', 'Scope: reading A', { group: 'Scope card' }),
@@ -357,14 +357,14 @@ export const skalleTypes: TypeDef[] = [
       index, heading(), lede,
       text('outsideLabel', 'Result label', { group: 'Result' }),
       list('switches', 'Switches', [
-        { name: 'id', label: 'Id (look, change, confirm, open)', type: 'text' },
+        { name: 'id', label: 'Id (look, change, confirm, open)', type: 'text', advanced: true },
         { name: 'label', label: 'Label', type: 'text' },
         { name: 'note', label: 'Note', type: 'text' },
         { name: 'locked', label: 'Cannot be changed', type: 'boolean' },
         { name: 'initial', label: 'On at the start', type: 'boolean' },
       ]),
       list('verdicts', 'Results', [
-        { name: 'when', label: 'When (blind, look, propose, direct)', type: 'text' },
+        { name: 'when', label: 'When (blind, look, propose, direct)', type: 'text', advanced: true },
         { name: 'text', label: 'Result text', type: 'textarea' },
       ]),
     ],
@@ -376,16 +376,16 @@ export const skalleTypes: TypeDef[] = [
     fields: [
       index, heading(), lede,
       list('modes', 'Three ways', [
-        { name: 'id', label: 'Id (doors, warehouse, links)', type: 'text' },
+        { name: 'id', label: 'Id (doors, warehouse, links)', type: 'text', advanced: true },
         { name: 'label', label: 'Tab', type: 'text' },
         { name: 'stat', label: 'Big number', type: 'text' },
         { name: 'body', label: 'Text', type: 'textarea' },
       ]),
       list('nodes', 'Services on the diagram', [
-        { name: 'id', label: 'Id', type: 'text' },
+        { name: 'id', label: 'Id', type: 'text', advanced: true },
         { name: 'label', label: 'Name', type: 'text' },
-        { name: 'x', label: 'Left', type: 'number' },
-        { name: 'y', label: 'Top', type: 'number' },
+        { name: 'x', label: 'Left', type: 'number', advanced: true },
+        { name: 'y', label: 'Top', type: 'number', advanced: true },
       ], { group: 'Diagram' }),
       area('links', 'Links (one per line, written as: weather > energy)', { group: 'Diagram' }),
       text('ownedLabel', 'Label under each service', { group: 'Diagram' }),
@@ -398,7 +398,7 @@ export const skalleTypes: TypeDef[] = [
     kind: 'section',
     fields: [
       list('steps', 'Steps', [
-        { name: 'id', label: 'Number', type: 'text' },
+        { name: 'id', label: 'Number', type: 'text', advanced: true },
         { name: 'name', label: 'Name', type: 'text' },
         { name: 'note', label: 'Note', type: 'text' },
       ]),
@@ -427,7 +427,7 @@ export const skalleTypes: TypeDef[] = [
       text('statusLabel', 'Status shown on each card'),
       text('linkLabel', 'Link text'),
       list('items', 'Cards', [
-        { name: 'id', label: 'Id (EXP_001)', type: 'text' },
+        { name: 'id', label: 'Id (EXP_001)', type: 'text', advanced: true },
         { name: 'title', label: 'Title', type: 'text' },
         { name: 'body', label: 'Text', type: 'textarea' },
         { name: 'year', label: 'Year', type: 'text' },
@@ -443,7 +443,7 @@ export const skalleTypes: TypeDef[] = [
     kind: 'section',
     fields: [
       list('items', 'Tools', [
-        { name: 'id', label: 'Lab id (LAB_001)', type: 'text' },
+        { name: 'id', label: 'Lab id (LAB_001)', type: 'text', advanced: true },
         { name: 'role', label: 'Role (NAMING)', type: 'text' },
         { name: 'name', label: 'Name', type: 'text' },
         { name: 'body', label: 'Text', type: 'textarea' },
@@ -469,7 +469,7 @@ export const skalleTypes: TypeDef[] = [
       text('tag', 'Tag (like CH)'),
       text('kicker', 'Label'),
       list('cards', 'Cards', [
-        { name: 'id', label: 'Id (CH_01)', type: 'text' },
+        { name: 'id', label: 'Id (CH_01)', type: 'text', advanced: true },
         { name: 'title', label: 'Title', type: 'text' },
         { name: 'body', label: 'Text', type: 'textarea' },
       ]),
@@ -491,6 +491,7 @@ export const skalleTypes: TypeDef[] = [
       img('image', 'Picture'),
       text('alt', 'Picture description'),
       text('caption', 'Picture caption'),
+      text('linkedinUrl', 'LinkedIn post address (filled in when posted)'),
       list('body', 'Story', [
         { name: 'type', label: 'Block', type: 'select', options: ['p', 'h', 'q', 'quote'] },
         { name: 'text', label: 'Text', type: 'textarea' },
@@ -524,7 +525,7 @@ export const skalleTypes: TypeDef[] = [
         { name: 'focus', label: 'Picture crop point', type: 'text' },
         { name: 'shape', label: 'Picture shape', type: 'select', options: ['square'] },
         { name: 'side', label: 'Picture side', type: 'select', options: ['left', 'right'] },
-        { name: 'extra', label: 'Extra data (tables, stages, cast, colophon)', type: 'json' },
+        { name: 'extra', label: 'Extra data (tables, stages, cast, colophon)', type: 'json', advanced: true },
       ]),
     ],
   },
@@ -608,7 +609,7 @@ export const skalleTypes: TypeDef[] = [
         { name: 'body', label: 'Text', type: 'textarea' },
       ]),
       list('specs', 'Specs', [
-        { name: 'id', label: 'Id', type: 'text' },
+        { name: 'id', label: 'Id', type: 'text', advanced: true },
         { name: 'short', label: 'Short name', type: 'text' },
         { name: 'title', label: 'Title', type: 'text' },
         { name: 'code', label: 'Code (SPEC_01)', type: 'text' },
@@ -616,7 +617,7 @@ export const skalleTypes: TypeDef[] = [
         { name: 'line', label: 'Summary', type: 'textarea' },
         { name: 'log', label: 'Log lines (one per line)', type: 'textarea' },
         { name: 'pros', label: 'Strengths (one per line)', type: 'textarea' },
-        { name: 'aliases', label: 'Words that open it (comma separated)', type: 'text' },
+        { name: 'aliases', label: 'Words that open it (comma separated)', type: 'text', advanced: true },
       ]),
     ],
   },

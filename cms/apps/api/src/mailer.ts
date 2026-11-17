@@ -76,3 +76,18 @@ export function startMailer() {
   setInterval(flush, 30_000).unref();
   console.log(mailConfigured() ? 'mail: notification emails are on' : 'mail: SMTP_HOST is not set, so notification emails are off (the bell still works)');
 }
+
+/** The 6-digit code for "Forgot password". Returns false when email is not set up (nothing was sent). */
+export async function sendResetCode(to: string, code: string): Promise<boolean> {
+  if (!mailConfigured()) {
+    // Local development only: with no mail server the code is printed here, so the flow can still be tried.
+    if (process.env.NODE_ENV !== 'production') console.log(`mail: SMTP is not set. Password reset code for ${to}: ${code}`);
+    return false;
+  }
+  await transport().sendMail({
+    from: from(), to, subject: `Your Synx Brain code: ${code}`,
+    text: `Your code to reset your Synx Brain password is ${code}.\nIt works for 15 minutes. If you did not ask for it, you can ignore this email.`,
+    html: `<div style="font-family:system-ui,sans-serif;font-size:14px"><p>Your code to reset your Synx Brain password:</p><p style="font-size:28px;letter-spacing:6px;font-weight:700">${esc(code)}</p><p style="color:#667">It works for 15 minutes. If you did not ask for it, you can ignore this email.</p></div>`,
+  });
+  return true;
+}

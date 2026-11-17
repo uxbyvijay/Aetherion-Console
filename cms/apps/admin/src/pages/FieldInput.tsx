@@ -1,31 +1,43 @@
+import { fieldLabel } from '../lib/fieldLabel';
 import { useEffect, useState, type ReactNode } from 'react';
 import { api, type Field, type Media, type Site } from '../api';
 import { MediaPicker } from './MediaPicker';
 import { IconField } from './IconPicker';
 import { ask } from '../lib/confirm';
 
+/** Top-level fields that only position or number things. They wait under "Advanced" on every page and article. */
+const TECHNICAL = new Set(['order', 'index', 'startNumber', 'seriesId', 'seriesName', 'termId', 'nested', 'path', 'linkedinUrl']);
+
 /** Renders the form for a list of fields. */
 /** `path` addresses each field in the page ("page" or a section id), so a click on the site can find it. */
-export function FieldForm({ site, fields, data, onChange, disabled, path }: {
-  site: Site; fields: Field[]; data: Record<string, unknown>; onChange: (next: Record<string, unknown>) => void; disabled?: boolean; path?: string;
+export function FieldForm({ site, fields, data, onChange, disabled, path, inItem }: {
+  site: Site; fields: Field[]; data: Record<string, unknown>; onChange: (next: Record<string, unknown>) => void; disabled?: boolean; path?: string; /** inside a list item: technical fields stay out of sight there */ inItem?: boolean;
 }) {
   const row = (f: Field) => (
     <div className="fld" key={f.name} data-field-path={path ? `${path}.${f.name}` : undefined}>
-      <label className="lbl">{f.label || f.name}{f.required && ' *'}</label>
+      <label className="lbl">{fieldLabel(f)}{f.required && ' *'}</label>
       <FieldInput site={site} f={f} path={path ? `${path}.${f.name}` : undefined} value={data[f.name]} onChange={(v) => onChange({ ...data, [f.name]: v })} />
+      {f.hint && <small className="muted fld-hint">{f.hint}</small>}
     </div>
   );
   // Fields that name the same group, one after the other, sit together under one heading. The heading is the value of the group's field whose name ends in Title (so a footer column is headed by its own title), otherwise the group's name.
   const blocks: ReactNode[] = [];
-  for (let i = 0; i < fields.length;) {
-    const g = fields[i].group;
-    if (!g) { blocks.push(row(fields[i])); i += 1; continue; }
+  // technical fields (ids, positions) wait under "Advanced" so they are not in the way
+  const visible = (x: Field) => !x.showWhen || x.showWhen.in.includes(String(data[x.showWhen.field] ?? ''));
+  const technical = (x: Field) => !!x.advanced || (!inItem && TECHNICAL.has(x.name));
+  const shown = fields.filter((x) => !technical(x) && visible(x));
+  const advanced = inItem ? [] : fields.filter((x) => technical(x) && visible(x));
+  for (let i = 0; i < shown.length;) {
+    const g = shown[i].group;
+    if (!g) { blocks.push(row(shown[i])); i += 1; continue; }
     const members: Field[] = [];
-    while (i < fields.length && fields[i].group === g) { members.push(fields[i]); i += 1; }
+    const startAt = i;
+    while (i < shown.length && shown[i].group === g) { members.push(shown[i]); i += 1; }
     const lead = members.find((m) => m.type === 'text' && /Title$/.test(m.name));
     const named = lead && typeof data[lead.name] === 'string' ? (data[lead.name] as string).trim() : '';
-    blocks.push(<details className="fld-group" key={`group:${g}`} open><summary>{named || g}</summary>{members.map(row)}</details>);
+    blocks.push(<details className="fld-group" key={`group:${g}:${startAt}`} open><summary>{named || g}</summary>{members.map(row)}</details>);
   }
+  if (advanced.length) blocks.push(<details className="fld-advanced" key="advanced"><summary>Advanced</summary>{advanced.map(row)}</details>);
   return <fieldset disabled={disabled}>{blocks}</fieldset>;
 }
 
@@ -121,11 +133,18 @@ function ArrayField({ site, f, value, onChange, path }: { site: Site; f: Field; 
     }
     endDrag();
   };
+  // a list of blocks (a "type" choice on every item): each row says what kind of block it is
+  const kindField = sub.find((x) => x.name === 'type' && x.type === 'select');
+  const KIND: Record<string, string> = { p: 'Paragraph', h2: 'Heading', h3: 'Subheading', list: 'List', quote: 'Quote', figure: 'Picture', table: 'Table', video: 'Video', diagram: 'Diagram', faq: 'Question', cards: 'Cards', markdown: 'Text' };
+  const kindName = (it: Record<string, unknown>) => { const k = String(it.type ?? ''); return k ? KIND[k] ?? (k.charAt(0).toUpperCase() + k.slice(1).replace(/-/g, ' ')) : ''; };
   const label = (it: Record<string, unknown>, i: number) => {
     // the first short or long text of the item that has something in it
     const t = sub.find((x) => (x.type === 'text' || x.type === 'textarea') && String(it[x.name] ?? '').trim() !== '');
-    const s = t ? String(it[t.name]).replace(/\s+/g, ' ').trim() : '';
-    return s ? (s.length > 70 ? s.slice(0, 69) + '…' : s) : `Item ${i + 1}`;
+    const raw = kindField && it.type === 'figure' ? String(it.caption || it.alt || '') : kindField && it.type === 'table' ? String(it.caption || '') || String(it.text ?? '').split('\n')[0] : t ? String(it[t.name]) : '';
+    const s = raw.replace(/\s+/g, ' ').trim();
+    const text = s ? (s.length > 60 ? s.slice(0, 59) + '…' : s) : '';
+    const kind = kindField ? kindName(it) : '';
+    return kind ? (text ? `${kind}: ${text}` : kind) : text || `Item ${i + 1}`;
   };
   return (
     <div className="array">
@@ -143,10 +162,10 @@ function ArrayField({ site, f, value, onChange, path }: { site: Site; f: Field; 
           actions={
             <button type="button" className="link" onClick={async () => { if (await ask({ title: `Delete "${label(it, i)}"?`, message: 'It is removed when you save.', confirmLabel: 'Delete' })) set(items.filter((_, j) => j !== i)); }} aria-label="Remove">✕</button>
           }>
-          <FieldForm site={site} fields={sub} data={it} path={path ? `${path}.${i}` : undefined} onChange={(d) => set(items.map((x, j) => (j === i ? d : x)))} />
+          <FieldForm inItem site={site} fields={sub} data={it} path={path ? `${path}.${i}` : undefined} onChange={(d) => set(items.map((x, j) => (j === i ? d : x)))} />
         </ArrayItem>
       ))}
-      <button type="button" onClick={() => set([...items, {}])}>+ Add {f.label || f.name}</button>
+      <button type="button" onClick={() => set([...items, kindField ? { type: kindField.options?.[0] ?? '' } : {}])}>{kindField ? '+ Add block' : '+ Add item'}</button>
     </div>
   );
 }

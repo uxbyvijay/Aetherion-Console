@@ -96,15 +96,20 @@ export function Connectors({ site }: { site: Site }) {
         <label>Name <input placeholder={isMcp ? 'notes' : 'products'} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
         <label className="wide">Address <input placeholder={isMcp ? 'https://example.com/mcp' : 'https://api.example.com/v1'} value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} /></label>
         <label>Key or token <input type="password" autoComplete="off" placeholder={editing?.hasToken ? 'Leave empty to keep the saved key' : 'Optional'} value={form.token} onChange={(e) => setForm({ ...form, token: e.target.value })} /></label>
-        {!isMcp && <label>Key header <input placeholder="Authorization (default)" value={form.tokenHeader} onChange={(e) => setForm({ ...form, tokenHeader: e.target.value })} /></label>}
-        <label className="wide">What it is <input placeholder={isMcp ? 'Optional' : 'Product catalogue (the assistant reads this to know when to use it)'} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label>
-        {isMcp && (
-          <label className="wide check">
-            <input type="checkbox" checked={form.allowWrites} onChange={(e) => setForm({ ...form, allowWrites: e.target.checked })} />
-            Also allow tools that change data. Off by default: only tools the server marks read-only are offered.
-          </label>
-        )}
       </div>
+      <details className="more" open={!!(form.description || form.allowWrites || (!isMcp && form.tokenHeader))}>
+        <summary>More options</summary>
+        <div className="conn-form">
+          {!isMcp && <label>Key header <input placeholder="Authorization (default)" value={form.tokenHeader} onChange={(e) => setForm({ ...form, tokenHeader: e.target.value })} /></label>}
+          <label className="wide">What it is <input placeholder={isMcp ? 'Optional' : 'Product catalogue (the assistant reads this to know when to use it)'} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label>
+          {isMcp && (
+            <label className="wide check">
+              <input type="checkbox" checked={form.allowWrites} onChange={(e) => setForm({ ...form, allowWrites: e.target.checked })} />
+              Also allow tools that change data. Off by default: only tools the server marks read-only are offered.
+            </label>
+          )}
+        </div>
+      </details>
       {err && <p className="err">{err}</p>}
       <div className="row">
         <button className="primary" disabled={busy || !form.name || !form.url} onClick={save}>{busy ? 'Saving…' : editing ? 'Save changes' : 'Add connector'}</button>

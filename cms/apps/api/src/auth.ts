@@ -50,9 +50,11 @@ export function requireSite(min: Role) {
       include: { memberships: { where: { siteId } } },
     });
     if (!user) return reply.code(401).send({ error: 'Unauthorized' });
+    if (user.mustChangePassword) return reply.code(403).send({ error: 'Choose a new password first.', code: 'password' });
     if (user.isSuperAdmin) return;
-    const m = user.memberships[0];
-    if (!m || rank[m.role] < rank[min]) return reply.code(403).send({ error: 'Forbidden' });
+    // the better of the role on this site and the role on every site
+    const best = Math.max(user.memberships[0] ? rank[user.memberships[0].role] : 0, user.allSitesRole ? rank[user.allSitesRole] : 0);
+    if (best < rank[min]) return reply.code(403).send({ error: 'Forbidden' });
   };
 }
 
@@ -60,5 +62,17 @@ export async function requireSuperAdmin(req: FastifyRequest, reply: FastifyReply
   await authenticate(req, reply);
   if (reply.sent) return;
   const user = await prisma.user.findUnique({ where: { id: req.user.sub } });
+  if (user?.mustChangePassword) return reply.code(403).send({ error: 'Choose a new password first.', code: 'password' });
   if (!user?.isSuperAdmin) return reply.code(403).send({ error: 'Super admin only' });
+}
+
+/** An admin, or someone who is an editor (or better) on every site. Used for things that reach all sites. */
+export async function requireAllSitesEditor(req: FastifyRequest, reply: FastifyReply) {
+  await authenticate(req, reply);
+  if (reply.sent) return;
+  const user = await prisma.user.findUnique({ where: { id: req.user.sub } });
+  if (user?.mustChangePassword) return reply.code(403).send({ error: 'Choose a new password first.', code: 'password' });
+  if (!user) return reply.code(401).send({ error: 'Unauthorized' });
+  if (user.isSuperAdmin) return;
+  if (!user.allSitesRole || rank[user.allSitesRole] < rank.EDITOR) return reply.code(403).send({ error: 'Forbidden' });
 }

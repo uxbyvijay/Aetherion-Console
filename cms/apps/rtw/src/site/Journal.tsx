@@ -76,6 +76,33 @@ function Body({ b, first, i }: { b: PostBlock; first: boolean; i: number }) {
           </div>
         </details>
       );
+    case "table": {
+      // one row per line, cells split by " | ", the first row is the header
+      const rows = text.split("\n").map((r) => r.trim()).filter(Boolean).map((r) => r.replace(/^\||\|$/g, "").split("|").map((c) => c.trim()));
+      if (!rows.length) return null;
+      const [head, ...rest] = rows;
+      return (
+        <figure className="my-8" {...path}>
+          <div className="overflow-x-auto border border-[var(--line)]">
+            <table className="w-full min-w-[520px] border-collapse text-left text-[15px] leading-6 text-[var(--ink)]">
+              <thead>
+                <tr className="bg-[var(--panel,rgba(255,255,255,0.04))]">
+                  {head.map((c, k) => <th key={k} className="border-b border-[var(--line)] px-4 py-3 font-medium">{c}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {rest.map((r, ri) => (
+                  <tr key={ri} className="border-b border-[var(--line)] last:border-b-0">
+                    {r.map((c, k) => <td key={k} className={`px-4 py-3 align-top ${k === 0 ? "font-medium" : "text-[var(--muted)]"}`}>{c}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {b.caption && <figcaption className="mt-2 font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--muted)]">{b.caption}</figcaption>}
+        </figure>
+      );
+    }
     case "cards": {
       const rows = text.split("\n").map((r) => r.split(" | "));
       return (

@@ -65,11 +65,14 @@ function KeyCard({ site, info, onChange }: { site: Site; info: KeyInfo; onChange
           <span>API key</span>
           <input type="password" autoComplete="off" spellCheck={false} placeholder={ready ? 'Paste a new key to replace it' : 'Paste your key'} value={key} onChange={(e) => { setKey(e.target.value); setResult(null); }} />
         </label>
+      </div>
+      <details className="more" open={!!model}>
+        <summary>More options</summary>
         <label>
-          <span>Model <span className="muted">(optional)</span></span>
+          <span>Model</span>
           <input placeholder={info.defaultModel} spellCheck={false} value={model} onChange={(e) => { setModel(e.target.value); setResult(null); }} />
         </label>
-      </div>
+      </details>
       {info.source === 'shared' && <p className="muted key-note">This site uses the key saved on {info.from}, so you only add it once. Paste a different key here to use it for this site only.</p>}
       {info.source === 'env' && <p className="muted key-note">This key comes from <code>{info.keyEnv}</code> in <code>apps/api/.env</code>. A key saved here is used instead.</p>}
 

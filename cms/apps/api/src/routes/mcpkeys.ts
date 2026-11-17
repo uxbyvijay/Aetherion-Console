@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { createHash, randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../db.js';
-import { requireSite, requireSuperAdmin } from '../auth.js';
+import { requireAllSitesEditor, requireSite } from '../auth.js';
 import { decrypt, encrypt } from '../agent/secret.js';
 
 /**
@@ -76,6 +76,6 @@ export default async function (app: FastifyInstance) {
     });
   }
 
-  mount('/sites/:siteId/mcp-keys', requireSite('ADMIN'), (req) => (req.params as { siteId: string }).siteId);
-  mount('/mcp-keys', requireSuperAdmin, () => null);
+  mount('/sites/:siteId/mcp-keys', requireSite('EDITOR'), (req) => (req.params as { siteId: string }).siteId);
+  mount('/mcp-keys', requireAllSitesEditor, () => null);
 }

@@ -24,6 +24,12 @@ model User {
   name         String
   passwordHash String
   isSuperAdmin Boolean      @default(false)
+  /// Access to every website in the CMS (including ones added later) with this role; sites can also be granted one by one through memberships.
+  allSitesRole Role?
+  /// Set when an admin made the password (a temporary one): the person must choose their own at first sign-in.
+  mustChangePassword Boolean @default(false)
+  /// The password an admin set, encrypted, so admins can show it again. Deleted when the person chooses their own.
+  passwordCopy String?
   memberships  Membership[]
   createdAt    DateTime     @default(now())
 }
@@ -34,6 +40,11 @@ model Site {
   slug         String        @unique
   domains      String[]
   previewUrl   String?
+  /// Hosting record (information only): DNS name, server name, port and IP address
+  dnsName      String?
+  serverName   String?
+  serverPort   Int?
+  serverIp     String?
   apiKey       String        @unique
   memberships  Membership[]
   contentTypes ContentType[]
@@ -176,4 +187,29 @@ model Notification {
 
   @@index([siteId, createdAt])
   @@index([emailedAt])
+}
+
+/// A 6-digit code emailed to someone who forgot their password (kept only as a hash, valid for 15 minutes).
+model PasswordReset {
+  id        String   @id @default(cuid())
+  userId    String
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+/// A note for admins when someone's password is reset or changed (shown in the bell for admins only).
+model AccountNotice {
+  id          String   @id @default(cuid())
+  /// reset-by-code | changed-by-user | reset-by-admin
+  kind        String
+  targetName  String
+  targetEmail String
+  actorName   String
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
 }

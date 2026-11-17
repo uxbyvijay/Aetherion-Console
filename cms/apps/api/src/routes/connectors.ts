@@ -33,7 +33,7 @@ const view = (c: { id: string; kind: string; name: string; url: string; descript
 });
 
 export default async function (app: FastifyInstance) {
-  app.get('/sites/:siteId/connectors', { preHandler: requireSite('ADMIN') }, async (req) => {
+  app.get('/sites/:siteId/connectors', { preHandler: requireSite('EDITOR') }, async (req) => {
     const { siteId } = req.params as { siteId: string };
     const rows = await prisma.connector.findMany({ where: { siteId, kind: { in: ['mcp', 'api'] } }, orderBy: { createdAt: 'asc' } });
     return {
@@ -43,7 +43,7 @@ export default async function (app: FastifyInstance) {
     };
   });
 
-  app.post('/sites/:siteId/connectors', { preHandler: requireSite('ADMIN') }, async (req, reply) => {
+  app.post('/sites/:siteId/connectors', { preHandler: requireSite('EDITOR') }, async (req, reply) => {
     const { siteId } = req.params as { siteId: string };
     const b = createBody.parse(req.body);
     if (await prisma.connector.findUnique({ where: { siteId_name: { siteId, name: b.name } } })) {
@@ -56,7 +56,7 @@ export default async function (app: FastifyInstance) {
     return reply.code(201).send(view(c));
   });
 
-  app.patch('/sites/:siteId/connectors/:id', { preHandler: requireSite('ADMIN') }, async (req, reply) => {
+  app.patch('/sites/:siteId/connectors/:id', { preHandler: requireSite('EDITOR') }, async (req, reply) => {
     const { siteId, id } = req.params as { siteId: string; id: string };
     const b = updateBody.parse(req.body);
     const cur = await prisma.connector.findFirst({ where: { id, siteId } });
@@ -79,7 +79,7 @@ export default async function (app: FastifyInstance) {
     return view(c);
   });
 
-  app.delete('/sites/:siteId/connectors/:id', { preHandler: requireSite('ADMIN') }, async (req, reply) => {
+  app.delete('/sites/:siteId/connectors/:id', { preHandler: requireSite('EDITOR') }, async (req, reply) => {
     const { siteId, id } = req.params as { siteId: string; id: string };
     const cur = await prisma.connector.findFirst({ where: { id, siteId } });
     if (cur) { await prisma.connector.delete({ where: { id } }); forgetServer(cur.name); }
@@ -87,7 +87,7 @@ export default async function (app: FastifyInstance) {
   });
 
   /** Tries the connector and says what it found: how many tools (MCP) or the HTTP status (API). */
-  app.post('/sites/:siteId/connectors/:id/test', { preHandler: requireSite('ADMIN') }, async (req, reply) => {
+  app.post('/sites/:siteId/connectors/:id/test', { preHandler: requireSite('EDITOR') }, async (req, reply) => {
     const { siteId, id } = req.params as { siteId: string; id: string };
     const c = await prisma.connector.findFirst({ where: { id, siteId } });
     if (!c) return reply.code(404).send({ error: 'Not found' });

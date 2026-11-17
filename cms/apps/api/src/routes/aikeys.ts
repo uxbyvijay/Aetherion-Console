@@ -48,7 +48,7 @@ async function check(p: ProviderId, key: string, model: string, defaultModel: st
 }
 
 export default async function (app: FastifyInstance) {
-  app.get('/sites/:siteId/ai-keys', { preHandler: requireSite('ADMIN') }, async (req) => {
+  app.get('/sites/:siteId/ai-keys', { preHandler: requireSite('EDITOR') }, async (req) => {
     const { siteId } = req.params as { siteId: string };
     const siteCount = await prisma.site.count();
     return Promise.all(allProviders().map(async (p) => {
@@ -66,7 +66,7 @@ export default async function (app: FastifyInstance) {
     }));
   });
 
-  app.put('/sites/:siteId/ai-keys/:provider', { preHandler: requireSite('ADMIN') }, async (req, reply) => {
+  app.put('/sites/:siteId/ai-keys/:provider', { preHandler: requireSite('EDITOR') }, async (req, reply) => {
     const { siteId } = req.params as { siteId: string };
     const p = provider.parse((req.params as { provider: string }).provider);
     const b = body.parse(req.body);
@@ -86,14 +86,14 @@ export default async function (app: FastifyInstance) {
     return { provider: p, source: c.source, hint: hint(c.key), model: c.model };
   });
 
-  app.delete('/sites/:siteId/ai-keys/:provider', { preHandler: requireSite('ADMIN') }, async (req, reply) => {
+  app.delete('/sites/:siteId/ai-keys/:provider', { preHandler: requireSite('EDITOR') }, async (req, reply) => {
     const { siteId } = req.params as { siteId: string };
     const p = provider.parse((req.params as { provider: string }).provider);
     await prisma.connector.deleteMany({ where: { siteId, name: p, kind: 'ai' } });
     return reply.code(204).send();
   });
 
-  app.post('/sites/:siteId/ai-keys/:provider/test', { preHandler: requireSite('ADMIN') }, async (req) => {
+  app.post('/sites/:siteId/ai-keys/:provider/test', { preHandler: requireSite('EDITOR') }, async (req) => {
     const { siteId } = req.params as { siteId: string };
     const p = provider.parse((req.params as { provider: string }).provider);
     const row = await prisma.connector.findUnique({ where: { siteId_name: { siteId, name: p } } });

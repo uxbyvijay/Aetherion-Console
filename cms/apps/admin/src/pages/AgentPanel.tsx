@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { api, type Site } from '../api';
+import { readAttachment, type Attachment } from '../lib/attach';
+import { requestOpen } from '../lib/openEntry';
 
 /** What the assistant proposes. It never saves or publishes: the page editor applies it as unsaved changes. */
 export interface Proposal {
@@ -8,6 +10,9 @@ export interface Proposal {
   addSections: { type: string; data: Record<string, unknown>; afterKey: string }[];
   removeKeys: string[];
   readyToPublish: boolean;
+  /** a LinkedIn post the assistant wrote; the person reviews it and posts it */
+  linkedinText?: string;
+  created?: { id: string; typeSlug: string; typeName: string; title: string };
 }
 /** One change the editor made from a proposal, in words the editor can read. */
 export interface Change { kind: 'edit' | 'add' | 'remove'; where: string; field?: string; from?: string; to?: string }
@@ -20,12 +25,25 @@ interface Info {
   mcp: { servers: string[]; tools: number; hidden: number; errors: string[] };
   apis: { name: string; description: string }[];
 }
+/** What publishing came back with: nothing when the person cancelled the confirmation. */
+export type PublishResult = { ok: boolean; error?: string } | null | void;
 interface Msg {
   role: 'user' | 'assistant'; content: string; applied?: Applied; locked?: boolean; undone?: boolean;
-  ready?: boolean; tools?: { name: string; ok: boolean }[]; error?: boolean;
+  ready?: boolean; linkedin?: string; created?: { id: string; typeSlug: string; typeName: string; title: string }; tools?: { name: string; ok: boolean }[]; error?: boolean;
   /** a small status line (for example "switched to Gemini"), not part of the conversation sent to the AI */
   note?: boolean;
+  /** files attached to this message: the name is shown, the text goes to the AI with the message */
+  files?: Attachment[];
 }
+const withFiles = (m: Msg) => {
+  const docs = (m.files ?? []).filter((f) => f.kind === 'text');
+  const pics = (m.files ?? []).filter((f) => f.kind === 'image' && f.url);
+  const parts = [
+    ...docs.map((f) => `Attached file "${f.name}":\n\`\`\`\n${f.text}\n\`\`\``),
+    ...pics.map((f) => `The attached picture "${f.name}" is saved in the media library at ${f.url} . Use that address for any picture field that should show it.`),
+  ];
+  return parts.length ? `${m.content}\n\n${parts.join('\n\n')}` : m.content;
+};
 
 const KEY = 'cms_agent_provider';
 /** Which model to use first, and which to switch to when one runs out of credits: the free-to-start one first. */
@@ -132,13 +150,21 @@ function Changes({ applied, locked, onUndo }: { applied: Applied; locked?: boole
   );
 }
 
-function Bubble({ m, last, busy, onUndo, onPublish, onFollow }: { m: Msg; last: boolean; busy: boolean; onUndo: () => void; onPublish: () => void; onFollow: (t: string) => void }) {
+function Bubble({ m, last, busy, onUndo, onPublish, onLinkedin, onFollow }: { m: Msg; last: boolean; busy: boolean; onUndo: () => void; onPublish: () => Promise<PublishResult>; onLinkedin?: (text: string) => void; onFollow: (t: string) => void }) {
   const [copied, setCopied] = useState(false);
+  const [pub, setPub] = useState<'idle' | 'working' | 'done' | { error: string }>('idle');
+  const doPublish = async () => {
+    setPub('working');
+    try {
+      const r = await onPublish();
+      setPub(r ? (r.ok ? 'done' : { error: r.error || 'Publishing did not work.' }) : 'idle');
+    } catch (e) { setPub({ error: (e as Error).message }); }
+  };
   const copy = async () => {
     try { await navigator.clipboard.writeText(m.content); setCopied(true); setTimeout(() => setCopied(false), 1400); } catch { /* clipboard not available */ }
   };
   if (m.note) return <div className="ag-switch" role="status">{m.content}</div>;
-  if (m.role === 'user') return <div className="ag-msg user"><div className="ag-bubble">{m.content}</div></div>;
+  if (m.role === 'user') return <div className="ag-msg user"><div className="ag-bubble">{m.content}{m.files?.length ? <div className="ag-files sent">{m.files.map((f, i) => <span key={f.name + i} className="ag-file">{f.preview ? <img src={f.preview} alt="" /> : <Icon name="doc" />}{f.name}</span>)}</div> : null}</div></div>;
   const steps = m.tools?.filter((t) => t.name !== 'propose_changes') ?? [];
   return (
     <div className={`ag-msg assistant${m.error ? ' error' : ''}`}>
@@ -151,9 +177,31 @@ function Bubble({ m, last, busy, onUndo, onPublish, onFollow }: { m: Msg; last: 
         {m.applied && <Changes applied={m.applied} locked={m.locked} onUndo={onUndo} />}
         {m.undone && <p className="ag-note">Those changes were taken back.</p>}
         {m.ready && !m.undone && (
+          pub === 'done' ? (
+            <div className="ag-publish ag-published" role="status">
+              <div><b><Icon name="check" /> Published</b><span className="muted">The changes are live on the site.</span></div>
+              <button type="button" onClick={() => window.dispatchEvent(new Event('cms:show-preview'))}>Show preview</button>
+            </div>
+          ) : (
+            <div className="ag-publish">
+              <div>
+                <b>Ready to publish</b>
+                {typeof pub === 'object' ? <span className="err">{pub.error} Nothing was published.</span> : <span className="muted">Review the page, then publish when you are happy.</span>}
+              </div>
+              <button type="button" className="primary" disabled={pub === 'working'} onClick={doPublish}>{pub === 'working' ? 'Publishing…' : typeof pub === 'object' ? 'Try again' : 'Review and publish…'}</button>
+            </div>
+          )
+        )}
+        {m.created && (
           <div className="ag-publish">
-            <div><b>Ready to publish</b><span className="muted">Review the page, then publish when you are happy.</span></div>
-            <button type="button" className="primary" onClick={onPublish}>Review and publish…</button>
+            <div><b>New {m.created.typeName.toLowerCase()} saved as a draft</b><span className="muted">{m.created.title}. It is not on the site yet. Open it to check it, add images and publish.</span></div>
+            <button type="button" className="primary" onClick={() => requestOpen(m.created!.id, m.created!.typeSlug)}>Open draft</button>
+          </div>
+        )}
+        {m.linkedin && onLinkedin && (
+          <div className="ag-publish ag-linkedin">
+            <div><b>LinkedIn post, not posted yet</b><span className="ag-li-text">{m.linkedin}</span></div>
+            <button type="button" className="primary" onClick={() => onLinkedin(m.linkedin!)}>Review and post…</button>
           </div>
         )}
         {!m.error && (
@@ -170,12 +218,14 @@ function Bubble({ m, last, busy, onUndo, onPublish, onFollow }: { m: Msg; last: 
 }
 
 /** Chat panel: pick Claude, ChatGPT or Gemini, describe the change (or paste a Google Doc link), review what it did. */
-export function AgentPanel({ site, typeSlug, getDoc, apply, onPublish, active, onClose }: {
+export function AgentPanel({ site, typeSlug, getDoc, apply, onPublish, onLinkedin, active, onClose }: {
   site: Site;
   typeSlug: string;
   getDoc: () => { data: Record<string, unknown>; sections: { id: string; type: string; data: Record<string, unknown> }[]; status: string };
   apply: (p: Proposal) => Applied;
-  onPublish: () => void;
+  onPublish: () => Promise<PublishResult>;
+  /** opens the LinkedIn post dialog with the text the assistant wrote (articles only) */
+  onLinkedin?: (text: string) => void;
   active: boolean;
   /** Shows a close button (used where the panel is a drawer). */
   onClose?: () => void;
@@ -188,13 +238,21 @@ export function AgentPanel({ site, typeSlug, getDoc, apply, onPublish, active, o
   const [waited, setWaited] = useState(0);
   const end = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLTextAreaElement>(null);
-  const [plusOpen, setPlusOpen] = useState(false);
-  useEffect(() => {
-    if (!plusOpen) return;
-    const close = (e: MouseEvent) => { if (!(e.target as HTMLElement).closest(".ag-plus")) setPlusOpen(false); };
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
-  }, [plusOpen]);
+  const [files, setFiles] = useState<Attachment[]>([]);
+  const [fileErr, setFileErr] = useState('');
+  const picker = useRef<HTMLInputElement>(null);
+  async function addFiles(list: FileList | null) {
+    if (!list) return;
+    setFileErr('');
+    const added: Attachment[] = [];
+    const errs: string[] = [];
+    for (const f of Array.from(list)) {
+      try { added.push(await readAttachment(f)); } catch (e) { errs.push((e as Error).message); }
+    }
+    if (errs.length) setFileErr(errs.join(' '));
+    if (added.length) setFiles((cur) => [...cur, ...added].slice(0, 6));
+    if (picker.current) picker.current.value = '';
+  }
 
   const [infoErr, setInfoErr] = useState('');
   // Which models are ready. Loaded when the panel opens, retried on its own if the server was busy restarting, and
@@ -240,11 +298,11 @@ export function AgentPanel({ site, typeSlug, getDoc, apply, onPublish, active, o
   async function ask(history: Msg[], prov: string, tried: string[]): Promise<void> {
     try {
       const r = await api<{ reply: string; proposal: Proposal | null; tools: { name: string; ok: boolean }[] }>(`/sites/${site.id}/agent/chat`, {
-        body: { provider: prov, messages: history.filter((m) => !m.note).map((m) => ({ role: m.role, content: m.content })), doc: { typeSlug, ...getDoc() } },
+        body: { provider: prov, messages: (() => { const live = history.filter((m) => !m.note); const lastImg = live.map((m) => !!m.files?.some((x) => x.kind === 'image')).lastIndexOf(true); return live.map((m, i) => ({ role: m.role, content: withFiles(m), ...(i === lastImg ? { images: m.files!.filter((x) => x.kind === 'image').slice(0, 3).map((x) => ({ mime: x.mime!, data: x.data! })) } : {}) })); })(), doc: { typeSlug, ...getDoc() } },
       });
       // earlier changes can no longer be taken back once newer ones are on top
       const applied = r.proposal && (r.proposal.edits.length || r.proposal.addSections.length || r.proposal.removeKeys.length) ? apply(r.proposal) : undefined;
-      setMsgs((m) => [...m.map((x) => ({ ...x, locked: !!x.applied || x.locked })), { role: 'assistant', content: r.reply, applied, ready: r.proposal?.readyToPublish, tools: r.tools }]);
+      setMsgs((m) => [...m.map((x) => ({ ...x, locked: !!x.applied || x.locked })), { role: 'assistant', content: r.reply, applied, ready: r.proposal?.readyToPublish, linkedin: r.proposal?.linkedinText, created: r.proposal?.created, tools: r.tools }]);
     } catch (e) {
       const code = (e as { code?: string }).code;
       const used = [...tried, prov];
@@ -264,7 +322,22 @@ export function AgentPanel({ site, typeSlug, getDoc, apply, onPublish, active, o
     const q = content.trim();
     if (!q || busy || !ready) return;
     setText('');
-    const history = [...msgs, { role: 'user' as const, content: q }];
+    let attached = content === text ? files : [];
+    if (attached.length) setFiles([]);
+    // pictures are saved to the media library first, so the assistant can put them on the page by their address
+    if (attached.some((a) => a.kind === 'image' && a.file)) {
+      setBusy(true);
+      attached = await Promise.all(attached.map(async (a) => {
+        if (a.kind !== 'image' || !a.file) return a;
+        try {
+          const form = new FormData();
+          form.append('file', a.file);
+          const m = await api<{ url: string }>(`/sites/${site.id}/media`, { form });
+          return { ...a, url: m.url };
+        } catch { return a; }
+      }));
+    }
+    const history = [...msgs, { role: 'user' as const, content: q, ...(attached.length ? { files: attached } : {}) }];
     setMsgs(history);
     setBusy(true);
     await ask(history, provider, []);
@@ -338,7 +411,7 @@ export function AgentPanel({ site, typeSlug, getDoc, apply, onPublish, active, o
         )}
 
         {msgs.map((m, i) => (
-          <Bubble key={i} m={m} last={i === lastAssistant} busy={busy} onUndo={() => undo(i)} onPublish={onPublish} onFollow={(t) => send(t)} />
+          <Bubble key={i} m={m} last={i === lastAssistant} busy={busy} onUndo={() => undo(i)} onPublish={onPublish} onLinkedin={onLinkedin} onFollow={(t) => send(t)} />
         ))}
 
         {busy && (
@@ -352,7 +425,15 @@ export function AgentPanel({ site, typeSlug, getDoc, apply, onPublish, active, o
 
       <form className="ag-composer" onSubmit={(e) => { e.preventDefault(); send(); }}>
         {link && <div className="ag-attach"><Icon name="doc" /> A Google {link[1] === 'spreadsheets' ? 'Sheet' : link[1] === 'presentation' ? 'Slides file' : 'Doc'} link was found. I will read it (it must be shared as “Anyone with the link”).</div>}
+        {fileErr && <p className="err ag-small">{fileErr}</p>}
         <div className="ag-input">
+          {files.length > 0 && (
+            <div className="ag-files">
+              {files.map((f, i) => (
+                <span key={f.name + i} className="ag-file">{f.preview ? <img src={f.preview} alt="" /> : <Icon name="doc" />}{f.name}<button type="button" aria-label={`Remove ${f.name}`} onClick={() => setFiles((cur) => cur.filter((_, j) => j !== i))}>×</button></span>
+              ))}
+            </div>
+          )}
           <textarea
             ref={box}
             rows={1}
@@ -364,17 +445,10 @@ export function AgentPanel({ site, typeSlug, getDoc, apply, onPublish, active, o
           />
           <div className="ag-input-bar">
             <div className="ag-plus">
-              <button type="button" className={`ag-plus-btn${plusOpen ? ' on' : ''}`} aria-label="Add" aria-expanded={plusOpen} disabled={!ready || busy} onClick={() => setPlusOpen((o) => !o)}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M12 5v14M5 12h14" /></svg>
+              <input ref={picker} type="file" multiple hidden accept="image/*,.svg,.docx,.doc,.txt,.md,.markdown,.csv,.json,.html,.htm,.xml,.yaml,.yml,text/*" onChange={(e) => addFiles(e.target.files)} />
+              <button type="button" className="ag-plus-btn" aria-label="Attach a file" title="Attach images, icons, Word or text files" disabled={!ready || busy || files.length >= 6} onClick={() => picker.current?.click()}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21 11.5l-8.6 8.6a5 5 0 01-7.1-7.1l8.9-8.9a3.3 3.3 0 014.7 4.7l-8.9 8.9a1.7 1.7 0 01-2.4-2.4l8.2-8.2" /></svg>
               </button>
-              {plusOpen && (
-                <ul className="ag-plus-menu" role="menu">
-                  {suggestions.map((sg) => (
-                    <li key={sg.title}><button type="button" role="menuitem" onClick={() => { setText(sg.text); setPlusOpen(false); box.current?.focus(); }}><Icon name={sg.icon} />{sg.title}</button></li>
-                  ))}
-                  <li className="ag-plus-sep"><button type="button" role="menuitem" disabled={!msgs.length} onClick={() => { setMsgs([]); setPlusOpen(false); }}><Icon name="plus" />New chat</button></li>
-                </ul>
-              )}
             </div>
             <button className="ag-send" aria-label="Send" title="Send (Enter)" disabled={!ready || busy || !text.trim()}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 19V5M5.5 11.5L12 5l6.5 6.5" /></svg>

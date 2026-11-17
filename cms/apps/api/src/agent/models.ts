@@ -5,7 +5,8 @@
  */
 export interface ToolDef { name: string; description: string; parameters: Record<string, unknown> }
 export type ToolRunner = (name: string, args: Record<string, unknown>) => Promise<string>;
-export interface Turn { role: 'user' | 'assistant'; content: string }
+export interface Img { mime: string; data: string }
+export interface Turn { role: 'user' | 'assistant'; content: string; images?: Img[] }
 export interface Cred { key: string; model: string }
 export interface RunInput { system: string; history: Turn[]; tools: ToolDef[]; run: ToolRunner; maxSteps?: number }
 
@@ -90,7 +91,7 @@ async function post(url: string, headers: Record<string, string>, body: unknown)
 }
 
 async function anthropic(input: RunInput, cred: Cred): Promise<string> {
-  const messages: any[] = input.history.map((t) => ({ role: t.role, content: t.content }));
+  const messages: any[] = input.history.map((t) => ({ role: t.role, content: t.images?.length ? [...t.images.map((i) => ({ type: 'image', source: { type: 'base64', media_type: i.mime, data: i.data } })), { type: 'text', text: t.content }] : t.content }));
   let said = '';
   for (let step = 0; step < (input.maxSteps ?? MAX_STEPS); step++) {
     const r = await post(baseUrl('ANTHROPIC_BASE_URL', 'https://api.anthropic.com') + '/v1/messages', { 'x-api-key': cred.key, 'anthropic-version': '2023-06-01' }, {
@@ -111,7 +112,7 @@ async function anthropic(input: RunInput, cred: Cred): Promise<string> {
 }
 
 async function openai(input: RunInput, cred: Cred): Promise<string> {
-  const messages: any[] = [{ role: 'system', content: input.system }, ...input.history.map((t) => ({ role: t.role, content: t.content }))];
+  const messages: any[] = [{ role: 'system', content: input.system }, ...input.history.map((t) => ({ role: t.role, content: t.images?.length ? [{ type: 'text', text: t.content }, ...t.images.map((i) => ({ type: 'image_url', image_url: { url: `data:${i.mime};base64,${i.data}` } }))] : t.content }))];
   let said = '';
   for (let step = 0; step < (input.maxSteps ?? MAX_STEPS); step++) {
     const r = await post(baseUrl('OPENAI_BASE_URL', 'https://api.openai.com/v1') + '/chat/completions', { authorization: `Bearer ${cred.key}` }, {
@@ -133,7 +134,7 @@ async function openai(input: RunInput, cred: Cred): Promise<string> {
 }
 
 async function gemini(input: RunInput, cred: Cred): Promise<string> {
-  const contents: any[] = input.history.map((t) => ({ role: t.role === 'assistant' ? 'model' : 'user', parts: [{ text: t.content }] }));
+  const contents: any[] = input.history.map((t) => ({ role: t.role === 'assistant' ? 'model' : 'user', parts: [{ text: t.content }, ...(t.images ?? []).map((i) => ({ inlineData: { mimeType: i.mime, data: i.data } }))] }));
   let said = '';
   for (let step = 0; step < (input.maxSteps ?? MAX_STEPS); step++) {
     const r = await post(

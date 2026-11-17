@@ -3,6 +3,14 @@ import { api, type Site } from '../api';
 import { initialsOf } from '../lib/people';
 
 interface Note { id: string; entryId: string | null; action: string; title: string; summary: string; actorId: string | null; actorName: string; source: string; createdAt: string }
+interface AccNote { id: string; kind: string; targetName: string; targetEmail: string; actorName: string; createdAt: string }
+const NOTE_TEXT: Record<string, (n: AccNote) => string> = {
+  'reset-by-code': (n) => `${n.targetName} reset their password with an emailed code`,
+  'changed-by-user': (n) => `${n.targetName} changed their password`,
+  'reset-by-admin': (n) => `${n.actorName} reset the password of ${n.targetName}`,
+};
+const noticeKey = 'cms_account_notice_seen';
+const readNoticeSeen = () => { try { return localStorage.getItem(noticeKey); } catch { return null; } };
 interface Feed { items: Note[]; me: string; email: { configured: boolean; on: boolean | null } }
 
 const VERB: Record<string, string> = { created: 'added', edited: 'edited', published: 'published', unpublished: 'unpublished', deleted: 'deleted', restored: 'restored an older version of' };
@@ -24,20 +32,26 @@ const Info = () => (
 );
 
 /** The bell in the top bar: what changed on this site, who did it, and whether to get it by email. */
-export function NotificationsBell({ site }: { site: Site }) {
+export function NotificationsBell({ site, isAdmin = false }: { site: Site; isAdmin?: boolean }) {
+  const [notes, setNotes] = useState<AccNote[]>([]);
+  const [noticeSeen, setNoticeSeen] = useState<string | null>(readNoticeSeen);
   const [feed, setFeed] = useState<Feed | null>(null);
   const [open, setOpen] = useState(false);
   const [seen, setSeen] = useState<string | null>(() => readSeen(site.id));
   const box = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
+    if (isAdmin) api<{ items: AccNote[] }>('/account-notices').then((r) => {
+      setNotes(r.items);
+      setNoticeSeen((cur) => { if (cur) return cur; const now = new Date().toISOString(); try { localStorage.setItem(noticeKey, now); } catch { /* ignore */ } return now; });
+    }).catch(() => {});
     try {
       const f = await api<Feed>(`/sites/${site.id}/notifications`);
       setFeed(f);
       // First time on this site: start from now, so the bell does not open with a pile of old changes marked unread.
       setSeen((cur) => { if (cur) return cur; const now = new Date().toISOString(); writeSeen(site.id, now); return now; });
     } catch { /* the API may be restarting; try again on the next tick */ }
-  }, [site.id]);
+  }, [site.id, isAdmin]);
 
   useEffect(() => {
     load();
@@ -57,10 +71,12 @@ export function NotificationsBell({ site }: { site: Site }) {
   });
 
   const isNew = (n: Note) => !!feed && !!seen && n.createdAt > seen && n.actorId !== feed.me;
-  const unread = feed ? feed.items.filter(isNew) : [];
+  const unreadNotes = notes.filter((n) => !!noticeSeen && n.createdAt > noticeSeen);
+  const unread = [...(feed ? feed.items.filter(isNew) : []), ...unreadNotes];
 
   function close() {
     setOpen(false);
+    if (notes[0]) { const latest = notes[0].createdAt; try { localStorage.setItem(noticeKey, latest); } catch { /* ignore */ } setNoticeSeen(latest); }
     if (feed?.items[0]) { const latest = feed.items[0].createdAt; writeSeen(site.id, latest); setSeen(latest); }
   }
 
@@ -83,6 +99,26 @@ export function NotificationsBell({ site }: { site: Site }) {
           </header>
 
           <div className="bp-body">
+            {notes.length > 0 && (
+              <>
+                <p className="bp-section">Password changes</p>
+                <ul className="bp-list">
+                  {notes.slice(0, 8).map((n) => (
+                    <li key={n.id} className={noticeSeen && n.createdAt > noticeSeen ? 'new' : ''}>
+                      <span className="bp-avatar" aria-hidden>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="11" width="16" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>
+                      </span>
+                      <div className="bp-text">
+                        <p>{(NOTE_TEXT[n.kind] ?? (() => `${n.targetName}: password changed`))(n)}</p>
+                        <small className="bp-time">{n.targetEmail} · {ago(n.createdAt)}</small>
+                      </div>
+                      {noticeSeen && n.createdAt > noticeSeen && <i className="bp-dot" aria-label="New" />}
+                    </li>
+                  ))}
+                </ul>
+                <p className="bp-section">Content changes</p>
+              </>
+            )}
             {!feed?.items.length ? (
               <div className="bp-empty">
                 <span className="bp-empty-ico">

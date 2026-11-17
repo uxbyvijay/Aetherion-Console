@@ -11,6 +11,12 @@ const leafFieldSchema = z.object({
   type: z.enum(fieldTypes.filter((t) => t !== 'array') as ['text']),
   required: z.boolean().optional(),
   options: z.array(z.string()).optional(),
+  /** Technical fields (ids, positions): kept out of the way, under "Advanced" in the editor. */
+  advanced: z.boolean().optional(),
+  /** A short line of help under the field. */
+  hint: z.string().max(300).optional(),
+  /** Inside a list item: show this field only when another field of the item has one of these values (for example a picture only for a "figure" block). */
+  showWhen: z.object({ field: z.string(), in: z.array(z.string()) }).optional(),
 });
 
 export const fieldSchema = z.object({
@@ -21,6 +27,11 @@ export const fieldSchema = z.object({
   options: z.array(z.string()).optional(),
   /** Fields with the same group, next to each other, are shown together in the editor under one heading. */
   group: z.string().optional(),
+  advanced: z.boolean().optional(),
+  /** A short line of help under the field. */
+  hint: z.string().max(300).optional(),
+  /** Inside a list item: show this field only when another field of the item has one of these values (for example a picture only for a "figure" block). */
+  showWhen: z.object({ field: z.string(), in: z.array(z.string()) }).optional(),
   /** For type "array": the fields of each item. */
   fields: z.array(leafFieldSchema).optional(),
 });

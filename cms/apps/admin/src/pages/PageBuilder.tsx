@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { ask } from '../lib/confirm';
+import { useReportDirty } from '../lib/dirty';
 import { api, type ContentType, type Entry, type Section, type Site } from '../api';
 import { FieldForm } from './FieldInput';
+import { fieldLabel } from '../lib/fieldLabel';
+import { firstText } from '../lib/titles';
 import { AgentPanel, type Applied, type Proposal } from './AgentPanel';
 import { applyProposalTo, useAiOpen } from '../lib/assistant';
 import { setHistoryTarget } from '../lib/versions';
@@ -11,19 +14,6 @@ type Draft = Partial<Entry> & { contentTypeId: string };
 
 const COLLAPSED = 6;
 const uid = () => crypto.randomUUID();
-/** A short title for a section or page: its first text field that has something in it, else its first long text, else the first line of its first list. */
-const clip = (s: string) => { const t = s.replace(/\s+/g, ' ').trim(); return t.length > 70 ? t.slice(0, 69) + '…' : t; };
-const firstText = (t: ContentType | undefined, d: Record<string, unknown>) => {
-  const fields = t?.fields ?? [];
-  const has = (v: unknown): v is string => typeof v === 'string' && v.trim() !== '';
-  for (const f of fields) if (f.type === 'text' && has(d[f.name])) return clip(d[f.name] as string);
-  for (const f of fields) if (f.type === 'textarea' && has(d[f.name])) return clip(d[f.name] as string);
-  for (const f of fields) {
-    const first = f.type === 'array' && Array.isArray(d[f.name]) ? (d[f.name] as Record<string, unknown>[])[0] : undefined;
-    for (const sf of f.fields ?? []) if ((sf.type === 'text' || sf.type === 'textarea') && has(first?.[sf.name])) return clip(first![sf.name] as string);
-  }
-  return '';
-};
 const firstImage = (t: ContentType | undefined, d: Record<string, unknown>) => {
   const f = t?.fields.find((x) => x.type === 'image');
   const v = f && d[f.name];
@@ -63,6 +53,7 @@ export function PageBuilder({ site, type, sectionTypes, entry, canEdit, onSaved,
   const snapshot = (st = status) => JSON.stringify([data, sections, slug, st]);
   const [baseline, setBaseline] = useState(snapshot);
   const dirty = snapshot() !== baseline;
+  useReportDirty(dirty);
   const base = `/sites/${site.id}/entries`;
   const def = (slugName: string) => sectionTypes.find((t) => t.slug === slugName);
 
@@ -110,7 +101,7 @@ export function PageBuilder({ site, type, sectionTypes, entry, canEdit, onSaved,
 
 
   /** Save keeps the status as it is; Publish saves and makes the page Published. */
-  async function save(publish = false) {
+  async function save(publish = false): Promise<string> {
     const next = publish ? 'PUBLISHED' : status;
     setErr(''); setSaving(true);
     try {
@@ -119,8 +110,9 @@ export function PageBuilder({ site, type, sectionTypes, entry, canEdit, onSaved,
       if (publish) setStatus('PUBLISHED');
       setBaseline(snapshot(next));
       onSaved(saved);
-    } catch (x) { setErr((x as Error).message); }
+    } catch (x) { setErr((x as Error).message); setSaving(false); return (x as Error).message; }
     setSaving(false);
+    return '';
   }
 
   const pageTitle = firstText(type, data) || slug || (entry.id ? 'Untitled page' : 'New page');
@@ -139,7 +131,7 @@ export function PageBuilder({ site, type, sectionTypes, entry, canEdit, onSaved,
         <>
           <p className="muted">Page settings</p>
           <FieldForm site={site} path="page" fields={type.fields} data={data} disabled={!canEdit} onChange={setData} />
-          <div className="fld"><label className="lbl">Slug</label><input value={slug} disabled={!canEdit} onChange={(e) => setSlug(e.target.value)} placeholder="home" /></div>
+          {slug !== 'home' && <div className="fld"><label className="lbl">Address</label><input value={slug} disabled={!canEdit} onChange={(e) => setSlug(e.target.value)} placeholder="about-us" /><p className="muted hint">The last part of the page address, for example "about-us" gives /about-us. Use small letters, numbers and dashes.</p></div>}
         </>
       )}
       {err && <p className="err">{err}</p>}
@@ -166,8 +158,11 @@ export function PageBuilder({ site, type, sectionTypes, entry, canEdit, onSaved,
     if (sel !== 'page' && !r.sections.some((x) => x.id === sel)) setSel('page');
     return { lines: r.lines, changes: r.changes, undo: () => { setData(before.data); setSections(before.sections); } };
   };
-  const publish = async () => {
-    if (await ask({ title: 'Publish changes?', message: 'They go live on the site right away.', confirmLabel: 'Publish', tone: 'primary' })) save(true);
+  /** Asks first, then publishes. Tells the assistant how it went (nothing when the person said no). */
+  const publish = async (): Promise<{ ok: boolean; error?: string } | null> => {
+    if (!(await ask({ title: 'Publish changes?', message: 'They go live on the site right away.', confirmLabel: 'Publish', tone: 'primary' }))) return null;
+    const error = await save(true);
+    return error ? { ok: false, error } : { ok: true };
   };
 
   return (
@@ -285,12 +280,12 @@ function InsertDialog({ types, onPick, onClose }: { types: ContentType[]; onPick
         <div className={grid ? 'insert-grid' : 'insert-list'}>
           {shown.map((t) => (
             <button key={t.id} className="insert-item" onClick={() => onPick(t)}>
-              <span className="insert-icon">{t.name.slice(0, 1).toUpperCase()}</span>
+              <span className="insert-icon" aria-hidden><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="6" rx="1.5" /><rect x="3" y="14" width="18" height="6" rx="1.5" /></svg></span>
               <span className="insert-name">{t.name}</span>
-              <small>{t.fields.length} fields</small>
+              <small>{t.fields.filter((x) => x.type !== 'image' && x.type !== 'icon').slice(0, 3).map(fieldLabel).join(', ')}</small>
             </button>
           ))}
-          {!shown.length && <p className="muted pad">{types.length ? 'No section type matches.' : 'No section types yet. Create some under Content types (kind: Section block).'}</p>}
+          {!shown.length && <p className="muted pad">{types.length ? 'No section type matches.' : 'There are no section types yet. Add some under Content types.'}</p>}
         </div>
       </div>
     </div>

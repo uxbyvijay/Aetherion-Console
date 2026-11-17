@@ -77,8 +77,10 @@ export default function App() {
   useEffect(() => {
     const onPreview = (e: Event) => {
       const m = (e as CustomEvent).detail as { contentType?: string; entry?: Doc } | undefined;
-      const entry = m?.entry;
-      if (!entry) return;
+      if (!m || !m.entry) return;
+      let entry: Doc = m.entry;
+      // an article that is not saved yet has no address: show it under a temporary one
+      if (m.contentType === "post" && !entry.slug) entry = { ...entry, slug: "new-article" };
       // The CMS always loads the site root; for a document or an article the site goes to that page itself.
       if (m.contentType === "doc") navigate(entry.path ? `/docs/${entry.path}` : "/docs");
       if (m.contentType === "post" && entry.slug) navigate(`/blog/${entry.slug}`);

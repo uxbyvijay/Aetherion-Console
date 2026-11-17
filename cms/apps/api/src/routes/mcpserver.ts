@@ -5,6 +5,7 @@ import { validateData, type Field } from '../fields.js';
 import { applyChanges, describeFields, type SectionDef, type SectionRow } from '../agent/edit.js';
 import { hashKey } from './mcpkeys.js';
 import { recordChange, type Actor } from '../activity.js';
+import { createPost, draftFor, isArticleType, LinkedinError, MAX_POST, postToken, postTokenValid } from '../agent/linkedin.js';
 import { diffDocs, draftProblems, previewDraft, previewToken, publishDraft, tokenValid } from '../agent/publish.js';
 
 /**
@@ -54,7 +55,7 @@ async function pickSite(p: Principal, requested: unknown): Promise<{ siteId: str
 const siteArg = { type: 'string', description: 'Which site this is about: its name or slug (see list_sites).' };
 const listSitesTool = { name: 'list_sites', description: 'List the sites this key can reach, with how much content each has. Call this first, then pass the site name in the "site" argument of every other tool.', inputSchema: { type: 'object', properties: {} }, annotations: { readOnlyHint: true } };
 
-const PUBLISH_TOOLS = ['preview_publish', 'publish_page', 'preview_live_edit', 'update_live_page'];
+const PUBLISH_TOOLS = ['preview_publish', 'publish_page', 'preview_live_edit', 'update_live_page', 'preview_linkedin_post', 'post_to_linkedin'];
 const text = (t: string, isError = false) => ({ content: [{ type: 'text', text: t }], ...(isError ? { isError: true } : {}) });
 const json = (v: unknown) => text(JSON.stringify(v, null, 1));
 
@@ -82,6 +83,8 @@ const tools = [
   { name: 'preview_live_edit', description: 'Step 1 of changing a LIVE page directly. Says exactly what would change and returns a token. It does NOT change anything. Show the user the summary and ask whether to apply it.', inputSchema: { type: 'object', properties: { slug: { type: 'string', description: 'The live page.' }, ...editShape }, required: ['slug'] }, annotations: { readOnlyHint: true } },
   { name: 'update_live_page', description: 'Step 2 of changing a LIVE page directly. CHANGES THE LIVE WEBSITE IMMEDIATELY. Only call this after the user has clearly said yes to the summary from preview_live_edit, with exactly the same changes. It needs that token and the user\'s confirmation in their own words. The user\'s AI app will also ask them to allow this call.', inputSchema: { type: 'object', properties: { slug: { type: 'string' }, ...editShape, token: { type: 'string', description: 'The token from preview_live_edit.' }, user_confirmation: { type: 'string', description: 'What the user said to confirm, in their own words.' } }, required: ['slug', 'token', 'user_confirmation'] }, annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false } },
   { name: 'update_draft', description: 'Edit a page that is still a DRAFT: change field values, add sections, remove sections. Pages that are live cannot be edited; use create_draft_copy first. Nothing is published.', inputSchema: { type: 'object', properties: { slug: { type: 'string', description: 'The draft page slug.' }, ...editShape }, required: ['slug'] }, annotations: { readOnlyHint: false, destructiveHint: false } },
+  { name: 'preview_linkedin_post', description: 'Step 1 of posting an ARTICLE to LinkedIn (articles are documents such as "article" or "post" in list_documents). Shows exactly what would be posted and returns a token. It does NOT post anything. Show the user the text and ask whether to post it. The article must be published and LinkedIn must be connected in the CMS.', inputSchema: { type: 'object', properties: { type: { type: 'string', description: 'The article type slug, for example "article" or "post". Optional when the site has one article type.' }, slug: { type: 'string', description: 'The article slug.' }, text: { type: 'string', description: 'Optional: the post text to use instead of the default (title and summary). Up to 3000 characters.' } }, required: ['slug'] }, annotations: { readOnlyHint: true } },
+  { name: 'post_to_linkedin', description: 'Step 2 of posting an article to LinkedIn. POSTS PUBLICLY TO LINKEDIN under the connected account and cannot be undone from here. Only call this after the user has clearly said yes to the exact text from preview_linkedin_post. It needs that token, the same text, and the user\'s confirmation in their own words. The user\'s AI app will also ask them to allow this call.', inputSchema: { type: 'object', properties: { type: { type: 'string' }, slug: { type: 'string' }, text: { type: 'string', description: 'Exactly the text that was previewed.' }, token: { type: 'string', description: 'The token from preview_linkedin_post.' }, user_confirmation: { type: 'string', description: 'What the user said to confirm, in their own words.' } }, required: ['slug', 'text', 'token', 'user_confirmation'] }, annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true } },
 ];
 
 export default async function (app: FastifyInstance) {
@@ -220,6 +223,45 @@ export default async function (app: FastifyInstance) {
       await recordChange({ entry: live, before: f.entry, action: 'edited', actor: aiActor });
       app.log.info({ liveEdit: { site: auth.siteId, page: f.entry.slug, via: 'AI tool, confirmed by the user in the AI app' } }, 'live page changed');
       return text(`Done. ${r.applied} change${r.applied === 1 ? '' : 's'} applied to the LIVE page "${f.entry.slug}". (User confirmation: "${said.slice(0, 120)}")`);
+    }
+
+    if (name === 'preview_linkedin_post' || name === 'post_to_linkedin') {
+      if (auth.perm !== 'publish') return text('This key cannot post to LinkedIn. Create a key with that permission under Settings › Connect Claude.', true);
+      const typeSlug = args.type ? String(args.type) : types.find(isArticleType)?.slug;
+      const f = await findDoc({ type: typeSlug, slug: String(args.slug ?? '') });
+      if ('error' in f) return text(f.error, true);
+      if (!isArticleType(f.type)) return text('Only articles can be posted to LinkedIn.', true);
+      const draft = await draftFor(auth.siteId, f.entry);
+      if (draft.problems.length) return text(`It cannot be posted yet: ${draft.problems.join(' ')}`, true);
+      const postText = String(args.text ?? '').trim() || draft.text;
+      if (postText.length > MAX_POST) return text(`LinkedIn posts can be up to ${MAX_POST} characters; this one is ${postText.length}.`, true);
+
+      if (name === 'preview_linkedin_post') {
+        return text([
+          'PREVIEW ONLY. Nothing has been posted.',
+          `This would be posted PUBLICLY on LinkedIn, with a link to ${draft.url}:`,
+          '',
+          postText,
+          '',
+          draft.postedUrl ? `Note: this article was already posted once (${draft.postedUrl}).` : '',
+          `NEXT: show the user this exact text and ask "Post this to LinkedIn now?". Only if they clearly say yes, call post_to_linkedin with slug "${f.entry.slug}", exactly this text, token "${postToken(f.entry, postText)}" and their confirmation in user_confirmation. Their AI app will also ask them to allow that call. The token works for 10 minutes and only for this exact text on this exact version of the article.`,
+        ].filter(Boolean).join('\n'));
+      }
+
+      const said = String(args.user_confirmation ?? '').trim();
+      if (said.length < 2) return text('Ask the user to confirm first, then pass their answer as user_confirmation.', true);
+      if (String(args.text ?? '').trim() !== postText || !postTokenValid(f.entry, postText, String(args.token ?? ''))) return text('That token is missing, has expired (10 minutes), or the text or the article changed after the preview. Call preview_linkedin_post again, show the user the new text and get their OK.', true);
+      try {
+        const done = await createPost(auth.siteId, { text: postText, url: draft.url, title: draft.title, description: draft.description });
+        app.log.info({ linkedin: { site: auth.siteId, article: f.entry.slug, via: 'AI tool, confirmed by the user in the AI app' } }, 'posted to LinkedIn');
+        if ((f.type.fields as unknown as { name: string }[]).some((x) => x.name === 'linkedinUrl') && done.url) {
+          const updated = await prisma.entry.update({ where: { id: f.entry.id }, data: { data: { ...(f.entry.data as object), linkedinUrl: done.url } } });
+          await recordChange({ entry: updated, before: f.entry, action: 'edited', actor: aiActor });
+        }
+        return text(`Posted to LinkedIn${done.url ? `: ${done.url}` : '.'} (User confirmation: "${said.slice(0, 120)}")`);
+      } catch (e) {
+        return text(e instanceof LinkedinError ? e.message : 'LinkedIn did not accept the post.', true);
+      }
     }
 
     if (name === 'preview_publish' || name === 'publish_page') {

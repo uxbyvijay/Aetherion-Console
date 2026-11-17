@@ -7,6 +7,8 @@ interface KeyRow { id: string; tool: string; label: string; perm: Perm; last4: s
 interface Listing { items: KeyRow[]; address: string; tools: Record<string, string> }
 
 const PUBLIC_KEY = 'cms_public_address';
+/** The CMS connection is for working on content, so only content tools are offered when adding a key. Keys made earlier for code tools keep working and can be removed. */
+const CONTENT_TOOLS = ['claude', 'chatgpt', 'other'];
 const PERMS: { id: Perm; title: string; text: string }[] = [
   { id: 'draft', title: 'Read and save drafts', text: 'The AI can read your pages, create draft pages and edit drafts. It can never publish or touch a live page.' },
   { id: 'publish', title: 'Read, save drafts and publish', text: 'It can also change live pages and publish, but only after it has shown you exactly what will change and you have said yes in that AI tool.' },
@@ -97,6 +99,7 @@ export function AiToolsConnect({ site }: { site?: Site }) {
   const [keys, setKeys] = useState<Record<string, string>>({}); // keys fetched so far
   const [visible, setVisible] = useState<Record<string, boolean>>({});
   const [open, setOpen] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [tool, setTool] = useState('claude');
   const [perm, setPerm] = useState<Perm>('draft');
   const [busy, setBusy] = useState(false);
@@ -151,30 +154,7 @@ export function AiToolsConnect({ site }: { site?: Site }) {
   const local = list?.address ?? 'http://localhost:4000/mcp';
   const toolName = (t: string) => list?.tools[t] ?? t;
 
-  return (
-    <div className="ai-tools">
-      {err && <p className="err">{err}</p>}
-      {!site && <p className="muted">These keys reach every site. The AI tool says which site each request is about, so one key works for Morph Space, Synx Tools, RTW and Skalle.</p>}
-
-      <div className="tk-public">
-        <label>
-          <b>Public address of this CMS</b> <span className="muted">(only for apps that connect from the internet, such as Claude's “Add custom connector” and ChatGPT)</span>
-          <input placeholder="https://your-name.trycloudflare.com" value={pub} onChange={(e) => setPub(e.target.value)} spellCheck={false} />
-        </label>
-        {pub && !publicOk && <p className="err">It must start with https://</p>}
-        <details>
-          <summary>How do I get one?</summary>
-          <p className="muted">Those apps cannot reach <code>localhost</code>. Open a tunnel to the small MCP-only door (it shows nothing but the MCP address, so the rest of the CMS stays private), then paste the https address it prints above:</p>
-          <pre>{`npm run mcp:public                                   # in the cms folder: starts the door on port 4010
-cloudflared tunnel --url http://localhost:4010       # or: ngrok http 4010`}</pre>
-          <p className="muted">Do not point a tunnel at port 4000 while sign-in is off: that would open the whole CMS to the internet.</p>
-        </details>
-      </div>
-
-      <h4>Keys</h4>
-      {list && list.items.length === 0 && <p className="muted">No keys yet. Add one for each AI tool you use, below.</p>}
-      <ul className="tk-list">
-        {list?.items.map((r) => {
+  const renderRow = (r: KeyRow) => {
           const key = keys[r.id];
           const shown = visible[r.id] && key;
           const g = open === r.id ? guides[r.tool] ?? guides.other : null;
@@ -189,18 +169,33 @@ cloudflared tunnel --url http://localhost:4010       # or: ngrok http 4010`}</pr
                 <select aria-label="What this key may do" value={r.perm} onChange={(e) => changePerm(r, e.target.value as Perm)}>
                   {PERMS.map((p) => <option key={p.id} value={p.id}>{permName(p.id)}</option>)}
                 </select>
-                <button type="button" onClick={() => toggleSetup(r)}>{open === r.id ? 'Hide setup' : 'Setup'}</button>
-                <button type="button" className="link delete-link always" onClick={() => remove(r)}>Remove</button>
               </div>
               <div className="key-line">
-                <code>{shown ? key : r.canShow ? `synxmcp_${site ? '' : 'all_'}••••••••••${r.last4}` : `••••••••${r.last4}`}</code>
-                {r.canShow ? (
-                  <>
-                    <button type="button" onClick={() => toggle(r)}>{visible[r.id] ? 'Hide' : 'Show'}</button>
-                    <button type="button" onClick={async () => { const k = await fetchKey(r); if (k) { try { await navigator.clipboard.writeText(k); } catch { /* clipboard not available */ } } }}>Copy</button>
-                  </>
-                ) : <span className="muted">Made before keys could be shown. Remove it and add a new one to see it.</span>}
+                <span className="tk-keybox">
+                  <code>{shown ? key : r.canShow ? `synxmcp_${site ? '' : 'all_'}••••••••••${r.last4}` : `••••••••${r.last4}`}</code>
+                  {r.canShow && (
+                    <>
+                      <button type="button" className="tk-icon" aria-label={visible[r.id] ? 'Hide the key' : 'Show the key'} title={visible[r.id] ? 'Hide' : 'Show'} onClick={() => toggle(r)}>
+                        {visible[r.id] ? (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 3l18 18" /><path d="M10.6 6.1A9.8 9.8 0 0 1 12 6c5 0 8.5 4.2 9.5 6-.4.8-1.2 1.9-2.3 3M6.5 7.6C4.6 8.9 3.3 10.7 2.5 12c1 1.8 4.5 6 9.5 6 1.5 0 2.8-.4 4-.9" /><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" /></svg>
+                        ) : (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M2.5 12S6 6 12 6s9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z" /><circle cx="12" cy="12" r="3" /></svg>
+                        )}
+                      </button>
+                      <button type="button" className="tk-icon" aria-label="Copy the key" title={copiedId === r.id ? 'Copied' : 'Copy'} onClick={async () => { const k = await fetchKey(r); if (k) { try { await navigator.clipboard.writeText(k); setCopiedId(r.id); setTimeout(() => setCopiedId((c) => (c === r.id ? null : c)), 1500); } catch { /* clipboard not available */ } } }}>
+                        {copiedId === r.id ? (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
+                        ) : (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V6a2 2 0 0 1 2-2h9" /></svg>
+                        )}
+                      </button>
+                    </>
+                  )}
+                </span>
+                <button type="button" onClick={() => toggleSetup(r)}>{open === r.id ? 'Hide setup' : 'Setup'}</button>
+                <button type="button" className="tk-remove" onClick={() => remove(r)}>Remove</button>
               </div>
+              {!r.canShow && <p className="muted tk-old">Made before keys could be shown. Remove it and add a new one to see it.</p>}
 
               {guide && (
                 <div className="tk-setup">
@@ -227,27 +222,57 @@ cloudflared tunnel --url http://localhost:4010       # or: ngrok http 4010`}</pr
               )}
             </li>
           );
-        })}
-      </ul>
+  };
+  const mine = (list?.items ?? []).filter((r) => CONTENT_TOOLS.includes(r.tool));
+  const codeKeys = (list?.items ?? []).filter((r) => !CONTENT_TOOLS.includes(r.tool));
 
-      <h4>Add a key for another AI tool</h4>
+  return (
+    <div className="ai-tools">
+      {err && <p className="err">{err}</p>}
       <div className="tk-add">
         <label>
           AI tool
           <select value={tool} onChange={(e) => setTool(e.target.value)}>
-            {Object.entries(list?.tools ?? { claude: 'Claude' }).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            {Object.entries(list?.tools ?? { claude: 'Claude' }).filter(([k]) => CONTENT_TOOLS.includes(k)).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
         </label>
+        <label>
+          Access
+          <select value={perm} onChange={(e) => setPerm(e.target.value as Perm)}>
+            {PERMS.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+          </select>
+        </label>
+        <button className="primary" disabled={busy} onClick={create}>{busy ? 'Adding…' : 'Add key'}</button>
       </div>
-      <div className="cc-perm" role="radiogroup" aria-label="What this key may do">
-        {PERMS.map((p) => (
-          <label key={p.id} className={perm === p.id ? 'on' : ''}>
-            <input type="radio" name={`perm-${site?.id ?? 'all'}`} checked={perm === p.id} onChange={() => setPerm(p.id)} />
-            <span><b>{p.title}</b><small>{p.text}</small></span>
-          </label>
-        ))}
-      </div>
-      <div className="row"><button className="primary" disabled={busy} onClick={create}>{busy ? 'Adding…' : 'Add key'}</button></div>
+      <p className="muted tk-perm-help">{PERMS.find((p) => p.id === perm)?.text}</p>
+
+      <h4>Your keys</h4>
+      {list && list.items.length === 0 && <p className="muted">No keys yet. Add one above for each AI tool you use.</p>}
+      <ul className="tk-list">{mine.map(renderRow)}</ul>
+
+      {codeKeys.length > 0 && (
+        <details className="more tk-code">
+          <summary>Keys for code tools ({codeKeys.length})</summary>
+          <p className="muted">Made earlier for developer tools such as Claude Code or Cursor. They still work. Remove the ones you no longer use.</p>
+          <ul className="tk-list">{codeKeys.map(renderRow)}</ul>
+        </details>
+      )}
+
+      <details className="more tk-public" open={!!pub}>
+        <summary>Connecting from the internet (Claude's “Add custom connector”, ChatGPT)</summary>
+        <label>
+          <b>Public address of this CMS</b>
+          <input placeholder="https://your-name.trycloudflare.com" value={pub} onChange={(e) => setPub(e.target.value)} spellCheck={false} />
+        </label>
+        {pub && !publicOk && <p className="err">It must start with https://</p>}
+        <details>
+          <summary>How do I get one?</summary>
+          <p className="muted">Those apps cannot reach <code>localhost</code>. Open a tunnel to the small MCP-only door (it shows nothing but the MCP address, so the rest of the CMS stays private), then paste the https address it prints above:</p>
+          <pre>{`npm run mcp:public                                   # in the cms folder: starts the door on port 4010
+cloudflared tunnel --url http://localhost:4010       # or: ngrok http 4010`}</pre>
+          <p className="muted">Do not point a tunnel at port 4000 while sign-in is off: that would open the whole CMS to the internet.</p>
+        </details>
+      </details>
     </div>
   );
 }
