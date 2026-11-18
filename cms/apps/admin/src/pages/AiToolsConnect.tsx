@@ -25,23 +25,30 @@ const bearer = (k: string) => `Bearer ${k}`;
 /** What each AI tool needs, with this key filled in. Menu names and file formats are the apps' own and can change: check the app's MCP help if a step differs. */
 const guides: Record<string, (c: Ctx) => Guide> = {
   claude: (c) => ({
-    form: true,
-    steps: [
+    form: c.hasPublic,
+    steps: c.hasPublic ? [
       'In Claude, open Settings › Connectors, then choose Add custom connector.',
       'Paste the Name and the MCP server URL from below, then press Continue.',
       'Leave any advanced sign-in options empty. The key is already inside the address.',
+    ] : [
+      'To try it on this computer, no public address is needed. Install Node.js if you do not have it, then add the block below to the Claude Desktop file claude_desktop_config.json (Claude Desktop › Settings › Developer › Edit Config).',
+      'Save the file and restart Claude Desktop. The Synx Brain tools then appear in a new chat.',
+      'Later, when your websites are live, add the public address under “Connecting from the internet” to use Claude on the web too.',
     ],
     blocks: [{
-      label: 'Claude Desktop on this computer, without a public address (add to claude_desktop_config.json, then restart Claude)',
+      label: c.hasPublic ? 'Claude Desktop on this computer, without a public address (add to claude_desktop_config.json, then restart Claude)' : 'claude_desktop_config.json',
       text: json({ mcpServers: { [c.id]: { command: 'npx', args: ['-y', 'mcp-remote', c.local, '--header', 'Authorization:${AUTH_HEADER}'], env: { AUTH_HEADER: bearer(c.key) } } } }),
     }],
   }),
-  chatgpt: () => ({
-    form: true,
-    steps: [
+  chatgpt: (c) => ({
+    form: c.hasPublic,
+    steps: c.hasPublic ? [
       'In ChatGPT, open Settings › Connectors and turn on Developer mode (under Advanced), then create a new connector.',
       'Paste the Name and the MCP server URL from below.',
       'Choose "No authentication". The key is already inside the address.',
+    ] : [
+      'ChatGPT runs on the internet, so it cannot reach this computer. You can set it up once your websites are live.',
+      'Then add the public address under “Connecting from the internet”. The details ChatGPT asks for appear here by themselves.',
     ],
     blocks: [],
   }),
@@ -206,7 +213,6 @@ export function AiToolsConnect({ site }: { site?: Site }) {
                         <Field label="Name" value={name} />
                         <Field label="MCP server URL" value={ctx.url} />
                       </div>
-                      {!publicOk && <p className="cc-warn" role="note">This app needs a <b>public https address</b>, and this CMS is on your computer. Add the public address at the top of this section first (see “How do I get one?”). The URL above then fills in by itself.</p>}
                       <p className="muted">The key is part of this address, so treat the address like a password and do not share it.</p>
                     </>
                   )}

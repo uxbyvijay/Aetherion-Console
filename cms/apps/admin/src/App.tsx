@@ -145,7 +145,7 @@ export default function App() {
         <div className="top-left">
           <strong className="brand">Synx Brain</strong>
           <select className="site-select" aria-label="Site" value={siteId} onChange={(e) => { const id = e.target.value; leaveThen(() => setSiteId(id)); }}>
-            {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            {sites.map((s) => <option key={s.id} value={s.id}>{s.domains[0] ? `${s.name} · ${s.domains[0]}` : s.name}</option>)}
             {!sites.length && <option value="">No sites</option>}
           </select>
         </div>
