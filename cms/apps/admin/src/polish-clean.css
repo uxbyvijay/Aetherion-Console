@@ -331,3 +331,13 @@ details.more > :not(summary) { margin-top: 10px; }
 .settings:not(.in-modal) .set-block { padding: 20px 24px; }
 .settings:not(.in-modal) .set-body { gap: 14px; }
 .settings:not(.in-modal) .set-block > header { margin-bottom: 12px; }
+
+/* GitHub connection */
+.gh-box { display: grid; gap: 12px; max-width: 560px; }
+.gh-box p { margin: 0; }
+.gh-form { display: grid; gap: 12px; }
+.gh-form label { display: grid; gap: 4px; }
+.gh-facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
+.gh-facts dt { color: var(--muted, #8b93a1); }
+.gh-facts dd { margin: 0; }
+.gh-log { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 4px; }

@@ -6,11 +6,12 @@ import { AiKeys } from './AiKeys';
 import { Connectors } from './Connectors';
 import { AiToolsConnect } from './AiToolsConnect';
 import { LinkedinSetup } from './LinkedinSetup';
+import { GithubConnect } from './GithubConnect';
 
 interface Props { /** a message to show on the LinkedIn page after LinkedIn sent the person back */ notice?: { ok: boolean; message: string }; user: User; site?: Site; sites: Site[]; reload: () => Promise<void>; onSelect: (id: string) => void; /** Goes back to the screen Settings was opened from. */ onBack?: () => void; backLabel?: string; /** Shown in a right panel instead of a whole page. */ panel?: boolean }
 /** The menu is about the whole CMS. Each website's own settings live inside "Websites". */
 type Section = 'ai' | 'tools' | 'sites' | 'team';
-type SiteTab = 'website' | 'tools' | 'linkedin' | 'connect';
+type SiteTab = 'website' | 'tools' | 'linkedin' | 'github' | 'connect';
 
 const KEY = 'cms_settings_section';
 const ICONS: Record<Section, ReactNode> = {
@@ -65,6 +66,7 @@ export function Settings(props: Props) {
     { id: 'website', label: 'Website', show: admin },
     { id: 'tools', label: 'AI tools', show: !!target && target.role !== 'VIEWER' },
     { id: 'linkedin', label: 'LinkedIn', show: !!target && target.role !== 'VIEWER' },
+    { id: 'github', label: 'GitHub', show: !!target && user.isSuperAdmin },
     { id: 'connect', label: 'Website key', show: admin },
   ];
   const visibleTabs = tabs.filter((t) => t.show);
@@ -249,6 +251,13 @@ export function Settings(props: Props) {
               {activeTab?.id === 'linkedin' && (
                 <Block title="Post articles to LinkedIn" hint={<>Share an article from {target.name} on your LinkedIn profile. Every post is shown to you first and only goes out when you confirm it, whether you start it here, with the AI assistant or from an AI tool.</>}>
                   <LinkedinSetup site={target} notice={props.notice} />
+                </Block>
+              )}
+
+              {/* GitHub: where this website publishes to */}
+              {activeTab?.id === 'github' && (
+                <Block title="Publish through GitHub" hint={<>Link {target.name} to its repository. Approved changes are sent as a pull request that a person reviews and merges on GitHub.</>}>
+                  <GithubConnect site={target} />
                 </Block>
               )}
 

@@ -20,6 +20,7 @@ import mcpkeys from './routes/mcpkeys.js';
 import mcpserver from './routes/mcpserver.js';
 import activity from './routes/activity.js';
 import linkedin from './routes/linkedin.js';
+import github from './routes/github.js';
 import { startMailer } from './mailer.js';
 
 const secret = process.env.JWT_SECRET;
@@ -97,6 +98,7 @@ await app.register(mcpkeys);
 await app.register(mcpserver);
 await app.register(activity);
 await app.register(linkedin);
+await app.register(github);
 startMailer();
 
 const port = Number(process.env.PORT ?? 4000);

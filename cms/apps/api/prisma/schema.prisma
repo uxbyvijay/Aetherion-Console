@@ -52,6 +52,7 @@ model Site {
   media        Media[]
   connectors   Connector[]
   mcpKeys      McpKey[]
+  githubLink   GithubLink?
   createdAt    DateTime      @default(now())
 }
 
@@ -212,4 +213,31 @@ model AccountNotice {
   createdAt   DateTime @default(now())
 
   @@index([createdAt])
+}
+
+/// The GitHub repository a website publishes to. The access token is never stored: it lives in the server environment.
+model GithubLink {
+  siteId      String   @id
+  site        Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  owner       String
+  repo        String
+  baseBranch  String   @default("main")
+  /// the only folder of the repository the console may write to
+  contentDir  String   @default("content")
+  connectedBy String
+  createdAt   DateTime @default(now())
+}
+
+/// Who did what in the console: admin actions and GitHub operations. Never holds secrets.
+model AuditLog {
+  id        String   @id @default(cuid())
+  siteId    String?
+  actorId   String?
+  actorName String
+  action    String
+  detail    String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([siteId, createdAt])
 }
