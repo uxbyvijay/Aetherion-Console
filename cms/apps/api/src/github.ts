@@ -72,14 +72,17 @@ export function checkRepoPath(p: string) {
   if (bad) throw new GithubError('That is not a valid path.', 400);
 }
 
-async function gh<T>(path: string): Promise<T> {
+async function gh<T>(path: string, init: { method?: 'POST'; body?: unknown } = {}): Promise<T> {
   const token = await bearer();
   const res = await fetch(API + path, {
-    headers: { authorization: `Bearer ${token}`, accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28', 'user-agent': 'cms-console' },
+    method: init.method ?? 'GET',
+    body: init.body === undefined ? undefined : JSON.stringify(init.body),
+    headers: { authorization: `Bearer ${token}`, accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28', 'user-agent': 'cms-console', ...(init.body === undefined ? {} : { 'content-type': 'application/json' }) },
   }).catch(() => { throw new GithubError('Could not reach GitHub.'); });
   if (res.status === 401) throw new GithubError('GitHub did not accept the token. It may have expired or been revoked.', 502);
   if (res.status === 403 || res.status === 429) throw new GithubError('GitHub refused the request (permissions or rate limit).', 502);
   if (res.status === 404) throw new GithubError('Not found on GitHub, or the token has no access to it.', 404);
+  if (res.status === 422) throw new GithubError(`GitHub rejected the request: ${((await res.json().catch(() => ({}))) as { message?: string }).message ?? 'invalid data'}`, 422);
   if (!res.ok) throw new GithubError(`GitHub answered ${res.status}.`);
   return res.json() as Promise<T>;
 }
@@ -120,4 +123,59 @@ export async function listFiles(owner: string, repo: string, ref: string, dir = 
   const items = await gh<any>(`/repos/${owner}/${repo}/contents/${dir.split('/').map(encodeURIComponent).join('/')}?ref=${encodeURIComponent(ref)}`);
   if (!Array.isArray(items)) throw new GithubError('That path is a file, not a folder.', 400);
   return items.map((i) => ({ name: i.name as string, path: i.path as string, type: i.type as string, size: i.size as number }));
+}
+
+/** Text files under a folder of the repository at a branch (empty when the folder does not exist yet). Capped, so a huge folder cannot be pulled in. */
+export async function readTree(owner: string, repo: string, ref: string, prefix: string): Promise<Map<string, string>> {
+  checkRepoName(owner, repo); checkBranchName(ref); checkRepoPath(prefix);
+  const out = new Map<string, string>();
+  const tree = await gh<{ tree: { path: string; type: string; sha: string; size?: number }[]; truncated?: boolean }>(`/repos/${owner}/${repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`);
+  if (tree.truncated) throw new GithubError('The repository is too large to compare safely.', 400);
+  const files = tree.tree.filter((t) => t.type === 'blob' && t.path.startsWith(prefix + '/'));
+  if (files.length > 500) throw new GithubError(`The folder ${prefix}/ has more than 500 files, which is more than this tool handles.`, 400);
+  for (const f of files) {
+    if ((f.size ?? 0) > 1_000_000) throw new GithubError(`${f.path} is larger than 1 MB.`, 400);
+    const blob = await gh<{ content: string; encoding: string }>(`/repos/${owner}/${repo}/git/blobs/${f.sha}`);
+    out.set(f.path, Buffer.from(blob.content, 'base64').toString('utf8'));
+  }
+  return out;
+}
+
+export interface PullRequestResult { number: number; url: string; branch: string; commit: string }
+/**
+ * Creates a branch from the base branch, puts one commit on it (adds/changes the given files, removes the ones set to null) and opens a pull request.
+ * Nothing is ever merged here: merging stays a human action on GitHub. The branch must live under "aetherion/".
+ */
+export async function openPullRequest(o: { owner: string; repo: string; base: string; branch: string; files: Map<string, string | null>; message: string; title: string; body: string }): Promise<PullRequestResult> {
+  checkRepoName(o.owner, o.repo); checkBranchName(o.base); checkBranchName(o.branch);
+  if (!o.branch.startsWith('aetherion/')) throw new GithubError('Branches made by the console must start with "aetherion/".', 400);
+  if (o.branch === o.base) throw new GithubError('The new branch must differ from the base branch.', 400);
+  const r = `/repos/${o.owner}/${o.repo}`;
+  const baseRef = await gh<{ object: { sha: string } }>(`${r}/git/ref/heads/${o.base.split('/').map(encodeURIComponent).join('/')}`);
+  const baseCommit = await gh<{ tree: { sha: string } }>(`${r}/git/commits/${baseRef.object.sha}`);
+  const entries = [...o.files].map(([path, content]) => {
+    checkRepoPath(path);
+    return content === null ? { path, mode: '100644', type: 'blob', sha: null } : { path, mode: '100644', type: 'blob', content };
+  });
+  const tree = await gh<{ sha: string }>(`${r}/git/trees`, { method: 'POST', body: { base_tree: baseCommit.tree.sha, tree: entries } });
+  const commit = await gh<{ sha: string }>(`${r}/git/commits`, { method: 'POST', body: { message: o.message, tree: tree.sha, parents: [baseRef.object.sha] } });
+  await gh(`${r}/git/refs`, { method: 'POST', body: { ref: `refs/heads/${o.branch}`, sha: commit.sha } });
+  const pr = await gh<{ number: number; html_url: string }>(`${r}/pulls`, { method: 'POST', body: { title: o.title, head: o.branch, base: o.base, body: o.body } });
+  return { number: pr.number, url: pr.html_url, branch: o.branch, commit: commit.sha };
+}
+
+export type PrState = 'pending' | 'approved' | 'changes_requested' | 'merged' | 'closed';
+/** Where a pull request stands on GitHub. GitHub is the source of truth: this only reads it. */
+export async function pullRequestState(owner: string, repo: string, number: number): Promise<PrState> {
+  checkRepoName(owner, repo);
+  const pr = await gh<{ state: string; merged: boolean }>(`/repos/${owner}/${repo}/pulls/${number}`);
+  if (pr.merged) return 'merged';
+  if (pr.state === 'closed') return 'closed';
+  const reviews = await gh<{ user: { login: string } | null; state: string }[]>(`/repos/${owner}/${repo}/pulls/${number}/reviews?per_page=100`);
+  const latest = new Map<string, string>();
+  for (const rv of reviews) if (rv.user && ['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'].includes(rv.state)) latest.set(rv.user.login, rv.state);
+  const states = [...latest.values()];
+  if (states.includes('CHANGES_REQUESTED')) return 'changes_requested';
+  if (states.includes('APPROVED')) return 'approved';
+  return 'pending';
 }

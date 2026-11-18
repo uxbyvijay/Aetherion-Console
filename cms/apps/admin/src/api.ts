@@ -32,7 +32,7 @@ export async function api<T = unknown>(path: string, init: { method?: string; bo
   }
   if (!res.ok) {
     const j = await res.json().catch(() => ({}));
-    throw Object.assign(new Error(j.error ?? `Request failed (${res.status})`), { code: j.code as string | undefined });
+    throw Object.assign(new Error(j.error ?? `Request failed (${res.status})`), { code: j.code as string | undefined, checks: j.checks as unknown });
   }
   return res.status === 204 ? (undefined as T) : res.json();
 }

@@ -341,3 +341,30 @@ details.more > :not(summary) { margin-top: 10px; }
 .gh-facts dt { color: var(--muted, #8b93a1); }
 .gh-facts dd { margin: 0; }
 .gh-log { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+
+/* Changes and Final Push */
+.pub-section { display: grid; gap: 10px; margin-top: 8px; padding-top: 16px; border-top: 1px solid var(--line, rgba(255,255,255,.08)); }
+.pub-section h4 { margin: 0; }
+.pub-box { display: grid; gap: 12px; }
+.pub-box p { margin: 0; }
+.pub-bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.pub-bar span { flex: 1; }
+.pub-list, .pub-checks, .pub-history ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.pub-list li > label { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pub-list code { word-break: break-all; }
+.pub-tag { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: rgba(255,255,255,.08); }
+.pub-tag.added { background: rgba(80,180,120,.2); }
+.pub-tag.deleted { background: rgba(220,90,90,.22); }
+.pub-diff { display: grid; gap: 8px; margin-top: 6px; }
+.pub-diff.two { grid-template-columns: 1fr 1fr; }
+.pub-diff pre { margin: 0; max-height: 240px; overflow: auto; font-size: 12px; padding: 8px; border-radius: 6px; background: rgba(255,255,255,.04); white-space: pre-wrap; word-break: break-word; }
+.pub-checks li.ok b { color: #5cc08a; }
+.pub-checks li.bad b { color: #e07070; }
+.pub-checks li.info b { color: #8b93a1; }
+.pub-done { padding: 10px 12px; border-radius: 8px; background: rgba(80,180,120,.12); }
+.pub-history h4 { margin: 0 0 6px; }
+.pub-state { font-size: 11px; padding: 1px 8px; border-radius: 999px; margin-right: 8px; background: rgba(255,255,255,.08); }
+.pub-state.approved, .pub-state.merged { background: rgba(80,180,120,.22); }
+.pub-state.changes_requested { background: rgba(230,170,70,.22); }
+.pub-state.closed { background: rgba(220,90,90,.22); }
+@media (max-width: 700px) { .pub-diff.two { grid-template-columns: 1fr; } }

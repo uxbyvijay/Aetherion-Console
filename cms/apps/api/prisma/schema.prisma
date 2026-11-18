@@ -53,6 +53,7 @@ model Site {
   connectors   Connector[]
   mcpKeys      McpKey[]
   githubLink   GithubLink?
+  publishes    PublishRecord[]
   createdAt    DateTime      @default(now())
 }
 
@@ -239,5 +240,25 @@ model AuditLog {
   createdAt DateTime @default(now())
 
   @@index([createdAt])
+  @@index([siteId, createdAt])
+}
+
+/// A pull request the console opened for a website. Its review status is read from GitHub, never stored.
+model PublishRecord {
+  id         String   @id @default(cuid())
+  siteId     String
+  site       Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  owner      String
+  repo       String
+  baseBranch String
+  branch     String
+  prNumber   Int
+  prUrl      String
+  title      String
+  /// [{ path, status }] of the files in the pull request
+  files      Json     @default("[]")
+  createdBy  String
+  createdAt  DateTime @default(now())
+
   @@index([siteId, createdAt])
 }

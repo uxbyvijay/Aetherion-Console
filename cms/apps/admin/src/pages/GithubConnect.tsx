@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, type Site } from '../api';
 import { ask } from '../lib/confirm';
+import { PublishPanel } from './PublishPanel';
 
 interface Status { configured: boolean; login?: string | null; error?: string }
 interface Repo { owner: string; name: string; fullName: string; private: boolean; defaultBranch: string; canPush: boolean }
@@ -118,6 +119,13 @@ export function GithubConnect({ site }: { site: Site }) {
             {link && <button type="button" onClick={() => { setEditing(false); setRepo(`${link.owner}/${link.repo}`); setBranch(link.baseBranch); setDir(link.contentDir); }}>Cancel</button>}
           </div>
         </form>
+      )}
+
+      {link && !showForm && (
+        <section className="pub-section">
+          <h4>Changes and Final Push</h4>
+          <PublishPanel site={site} />
+        </section>
       )}
 
       {log.length > 0 && (
