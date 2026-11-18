@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
 /**
- * Synx Brain connection. Pages are built from sections kept in the CMS; if the CMS is not set up or cannot be
+ * Aetherion Console connection. Pages are built from sections kept in the CMS; if the CMS is not set up or cannot be
  * reached, every page falls back to the text that ships with the site (see the `defaults` next to each page).
  *
  * Set VITE_CMS_URL and VITE_CMS_KEY (the site's delivery key) in .env.local. See .env.example.

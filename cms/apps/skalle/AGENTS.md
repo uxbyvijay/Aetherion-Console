@@ -1,6 +1,6 @@
 # Skalle AI site
 
-The Skalle AI website (the design from `Desktop/Project/New/skalleaiLP`), as a plain React + Vite app that reads every page from the Synx Brain CMS. Runs on port 5182 (`npm run dev:skalle` in `cms`).
+The Skalle AI website (the design from `Desktop/Project/New/skalleaiLP`), as a plain React + Vite app that reads every page from the Aetherion Console CMS. Runs on port 5182 (`npm run dev:skalle` in `cms`).
 
 - **One app, many addresses.** `index.html` -> `src/main.tsx` -> `src/App.tsx`. `/` is the `home` page, `/articles/<slug>` a Times article, `/chronicles/<slug>` a comic volume, anything else is the page whose slug is the address (`/system`, `/lab`...). `src/lib/router.ts` and `src/lib/Link.tsx` route without reload.
 - **Content** comes from the CMS (`src/lib/cms.tsx`): the page's sections, the shared Header, Footer, Website Settings and Spec manual, the Times articles and the Chronicle volumes. It needs `VITE_CMS_URL` and `VITE_CMS_KEY` (the Skalle delivery key) in `.env.local`; see `.env.example`.

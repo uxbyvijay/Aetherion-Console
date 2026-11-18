@@ -1,7 +1,7 @@
 import { createContext, useContext } from "react";
 
 /**
- * Synx Brain connection. Every page is built from content kept in the CMS: the docs, the Journals articles, the designed pages, the
+ * Aetherion Console connection. Every page is built from content kept in the CMS: the docs, the Journals articles, the designed pages, the
  * glossary and the shared header, footer and settings. Set VITE_CMS_URL and VITE_CMS_KEY (this site's delivery key) in .env.local.
  */
 export const CMS_URL = (import.meta.env.VITE_CMS_URL as string | undefined)?.replace(/\/$/, "");

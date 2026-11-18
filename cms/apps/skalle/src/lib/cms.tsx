@@ -1,7 +1,7 @@
 import { createContext, useContext } from "react";
 
 /**
- * Synx Brain connection. Every page is built from content kept in the CMS: the page's sections, the shared header, footer,
+ * Aetherion Console connection. Every page is built from content kept in the CMS: the page's sections, the shared header, footer,
  * settings and spec manual, the Times articles and the Chronicle volumes. Set VITE_CMS_URL and VITE_CMS_KEY (this site's
  * delivery key) in .env.local. See .env.example.
  */

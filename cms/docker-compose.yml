@@ -1,4 +1,4 @@
-# Postgres for Synx Brain. Bound to localhost only.
+# Postgres for Aetherion Console. Bound to localhost only.
 name: synx-cms
 
 services:

@@ -1,6 +1,6 @@
 # Synx Tools site
 
-The Synx Tools website (the design from `Desktop/Project/New/Synx`), as a plain React + Vite app that reads every page from the Synx Brain CMS. Runs on port 5181 (`npm run dev:synx` in `cms`).
+The Synx Tools website (the design from `Desktop/Project/New/Synx`), as a plain React + Vite app that reads every page from the Aetherion Console CMS. Runs on port 5181 (`npm run dev:synx` in `cms`).
 
 - **One app, many addresses.** `index.html` -> `src/main.tsx` -> `src/App.tsx`. The address picks the page: `/` is `home`, `/news/<slug>` an article, anything else is the page whose slug is the address (`/dns`, `/who`...). `src/lib/router.ts` and `src/lib/Link.tsx` do the routing (no reload).
 - **Content** comes from the CMS (`src/lib/cms.tsx`): the page's sections, the shared Header, Footer and Website Settings, the Articles and the Team members. It needs `VITE_CMS_URL` and `VITE_CMS_KEY` (the Synx Tools delivery key) in `.env.local`; see `.env.example`.

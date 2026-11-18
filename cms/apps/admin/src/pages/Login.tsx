@@ -140,7 +140,7 @@ export function Login({ onDone }: { onDone: (u: User) => void }) {
 
   return (
     <form className="card login" onSubmit={submit}>
-      <h1>Synx Brain</h1>
+      <h1>Aetherion Console</h1>
       <p className="muted">{setup ? 'Create the first admin account.' : 'Sign in to continue.'}</p>
       {setup && <input placeholder="Name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required />}
       <input type="email" placeholder="Email" autoComplete="username" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} required />

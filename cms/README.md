@@ -1,4 +1,4 @@
-# Synx Brain
+# Aetherion Console
 
 Multi-site headless CMS. One admin manages content for many websites.
 

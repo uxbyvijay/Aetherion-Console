@@ -17,14 +17,14 @@ const transport = () => nodemailer.createTransport({
   secure: process.env.SMTP_SECURE === 'true',
   auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS ?? '' } : undefined,
 });
-const from = () => process.env.MAIL_FROM || process.env.SMTP_USER || 'Synx Brain <no-reply@localhost>';
+const from = () => process.env.MAIL_FROM || process.env.SMTP_USER || 'Aetherion Console <no-reply@localhost>';
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 const verb: Record<string, string> = { created: 'added', edited: 'edited', published: 'published', unpublished: 'unpublished', deleted: 'deleted', restored: 'restored an older version of' };
 const adminUrl = () => process.env.ADMIN_ORIGIN || 'http://localhost:5173';
 
 export async function sendTest(to: string) {
   if (!mailConfigured()) throw new Error('Email is not set up on the server yet (SMTP_HOST is empty).');
-  await transport().sendMail({ from: from(), to, subject: 'Synx Brain test email', text: 'This is a test. Change notifications will arrive like this.' });
+  await transport().sendMail({ from: from(), to, subject: 'Aetherion Console test email', text: 'This is a test. Change notifications will arrive like this.' });
 }
 
 let busy = false;
@@ -57,8 +57,8 @@ async function flush() {
         try {
           await mail.sendMail({
             from: from(), to: m.user.email, subject,
-            text: mine.map((n) => `${n.actorName} ${verb[n.action] ?? n.action} "${n.title}"${n.summary ? ' - ' + n.summary : ''}`).join('\n') + `\n\nOpen Synx Brain: ${adminUrl()}\nTurn these emails off in the bell menu inside Synx Brain.`,
-            html: `<div style="font-family:system-ui,sans-serif;font-size:14px"><p>Changes on <b>${esc(site?.name ?? '')}</b>:</p><ul>${rows}</ul><p><a href="${esc(adminUrl())}">Open Synx Brain</a></p><p style="color:#889;font-size:12px">You can turn these emails off in the bell menu.</p></div>`,
+            text: mine.map((n) => `${n.actorName} ${verb[n.action] ?? n.action} "${n.title}"${n.summary ? ' - ' + n.summary : ''}`).join('\n') + `\n\nOpen Aetherion Console: ${adminUrl()}\nTurn these emails off in the bell menu inside Aetherion Console.`,
+            html: `<div style="font-family:system-ui,sans-serif;font-size:14px"><p>Changes on <b>${esc(site?.name ?? '')}</b>:</p><ul>${rows}</ul><p><a href="${esc(adminUrl())}">Open Aetherion Console</a></p><p style="color:#889;font-size:12px">You can turn these emails off in the bell menu.</p></div>`,
           });
         } catch (err) {
           failed = true;
@@ -85,9 +85,9 @@ export async function sendResetCode(to: string, code: string): Promise<boolean> 
     return false;
   }
   await transport().sendMail({
-    from: from(), to, subject: `Your Synx Brain code: ${code}`,
-    text: `Your code to reset your Synx Brain password is ${code}.\nIt works for 15 minutes. If you did not ask for it, you can ignore this email.`,
-    html: `<div style="font-family:system-ui,sans-serif;font-size:14px"><p>Your code to reset your Synx Brain password:</p><p style="font-size:28px;letter-spacing:6px;font-weight:700">${esc(code)}</p><p style="color:#667">It works for 15 minutes. If you did not ask for it, you can ignore this email.</p></div>`,
+    from: from(), to, subject: `Your Aetherion Console code: ${code}`,
+    text: `Your code to reset your Aetherion Console password is ${code}.\nIt works for 15 minutes. If you did not ask for it, you can ignore this email.`,
+    html: `<div style="font-family:system-ui,sans-serif;font-size:14px"><p>Your code to reset your Aetherion Console password:</p><p style="font-size:28px;letter-spacing:6px;font-weight:700">${esc(code)}</p><p style="color:#667">It works for 15 minutes. If you did not ask for it, you can ignore this email.</p></div>`,
   });
   return true;
 }

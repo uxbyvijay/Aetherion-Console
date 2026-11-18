@@ -298,7 +298,7 @@ export default async function (app: FastifyInstance) {
     // ---- instructions for the AI ----
     const content = JSON.stringify({ ...body.doc.data, ...(isPage ? { sections: body.doc.sections.map((s) => ({ key: s.id, type: s.type, ...s.data })) } : {}) }, null, 1);
     const system = [
-      `You are the editing assistant inside Synx Brain, a CMS. You help ${site.name}'s editor write and change website content.`,
+      `You are the editing assistant inside Aetherion Console, a CMS. You help ${site.name}'s editor write and change website content.`,
       `The editor has the ${docType.name} ${docType.kind === 'page' ? 'page' : 'document'} open (status ${body.doc.status ?? 'unknown'}). You can only change it through the propose_changes tool; changes appear in the editor as unsaved edits and the user reviews, saves and publishes them. You cannot publish or save.`,
       '',
       `Fields of the document itself ("page" in edit paths):`,

@@ -32,7 +32,7 @@ const guides: Record<string, (c: Ctx) => Guide> = {
       'Leave any advanced sign-in options empty. The key is already inside the address.',
     ] : [
       'To try it on this computer, no public address is needed. Install Node.js if you do not have it, then add the block below to the Claude Desktop file claude_desktop_config.json (Claude Desktop › Settings › Developer › Edit Config).',
-      'Save the file and restart Claude Desktop. The Synx Brain tools then appear in a new chat.',
+      'Save the file and restart Claude Desktop. The Aetherion Console tools then appear in a new chat.',
       'Later, when your websites are live, add the public address under “Connecting from the internet” to use Claude on the web too.',
     ],
     blocks: [{
@@ -119,7 +119,7 @@ export function AiToolsConnect({ site }: { site?: Site }) {
 
   const publicBase = pub.trim().replace(/\/+$/, '');
   const publicOk = /^https:\/\/[^\s/]+/.test(publicBase);
-  const name = site ? `Synx Brain: ${site.name}` : 'Synx Brain (all sites)';
+  const name = site ? `Aetherion Console: ${site.name}` : 'Aetherion Console (all sites)';
   const id = site ? `synx-${slug(site.name)}` : 'synx-brain';
 
   async function fetchKey(r: KeyRow): Promise<string | undefined> {

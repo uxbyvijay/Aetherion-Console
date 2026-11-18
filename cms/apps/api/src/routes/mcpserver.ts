@@ -323,7 +323,7 @@ export default async function (app: FastifyInstance) {
     switch (msg.method) {
       case 'initialize': {
         const asked = msg.params?.protocolVersion;
-        return ok({ protocolVersion: SUPPORTED.includes(asked) ? asked : SUPPORTED[0], capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'synx-brain', version: '0.1.0' }, instructions: auth.all ? 'Synx Brain CMS, all sites. Start with list_sites, then pass the site name in the "site" argument of every other tool. Then get_site, list_documents and get_document. Anything that changes a live page needs the user\'s confirmation.' : 'Synx Brain CMS. Start with get_site, then list_documents and get_document. Anything that changes a live page needs the user\'s confirmation.' });
+        return ok({ protocolVersion: SUPPORTED.includes(asked) ? asked : SUPPORTED[0], capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'synx-brain', version: '0.1.0' }, instructions: auth.all ? 'Aetherion Console CMS, all sites. Start with list_sites, then pass the site name in the "site" argument of every other tool. Then get_site, list_documents and get_document. Anything that changes a live page needs the user\'s confirmation.' : 'Aetherion Console CMS. Start with get_site, then list_documents and get_document. Anything that changes a live page needs the user\'s confirmation.' });
       }
       case 'ping': return ok({});
       case 'tools/list': {
