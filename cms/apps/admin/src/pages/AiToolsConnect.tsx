@@ -172,6 +172,7 @@ export function AiToolsConnect({ site }: { site?: Site }) {
               <div className="tk-head">
                 <b>{r.label}</b>
                 {r.label !== toolName(r.tool) && <span className="status-pill on">{toolName(r.tool)}</span>}
+                <span className="muted tk-added">Added {new Date(r.createdAt).toLocaleDateString()}</span>
                 <span className="grow" />
                 <select aria-label="What this key may do" value={r.perm} onChange={(e) => changePerm(r, e.target.value as Perm)}>
                   {PERMS.map((p) => <option key={p.id} value={p.id}>{permName(p.id)}</option>)}
@@ -199,8 +200,8 @@ export function AiToolsConnect({ site }: { site?: Site }) {
                     </>
                   )}
                 </span>
-                <button type="button" onClick={() => toggleSetup(r)}>{open === r.id ? 'Hide setup' : 'Setup'}</button>
-                <button type="button" className="tk-remove" onClick={() => remove(r)}>Remove</button>
+                <button type="button" aria-label={`${open === r.id ? 'Hide setup' : 'Setup'} for ${r.label} ending ${r.last4}`} onClick={() => toggleSetup(r)}>{open === r.id ? 'Hide setup' : 'Setup'}</button>
+                <button type="button" className="tk-remove" aria-label={`Remove ${r.label} key ending ${r.last4}`} onClick={() => remove(r)}>Remove</button>
               </div>
               {!r.canShow && <p className="muted tk-old">Made before keys could be shown. Remove it and add a new one to see it.</p>}
 

@@ -151,7 +151,7 @@ export function Structure({ site, canEdit, goTypes }: { site: Site; canEdit: boo
       </div>
     );
   }
-  if (!types) return null;
+  if (!types) return <div className="pane-loading" role="status"><span className="boot-spin" aria-hidden /> Loading {site.name}…</div>;
 
   const activeType = view?.t === 'type' ? typeOf(view.typeId) : undefined;
   const isList = activeType && activeType.kind !== 'singleton';
@@ -317,10 +317,10 @@ export function Structure({ site, canEdit, goTypes }: { site: Site; canEdit: boo
           })()}
           {!listDocs.length && <p className="muted pad">{filter === 'ALL' ? 'No documents yet.' : 'Nothing matches this filter.'}</p>}
           {listDocs.map((e) => (
-            <button key={e.id} className={`doc-row${sel?.id === e.id ? ' on' : ''}`} onClick={() => leaveThen(() => setSel(e))}>
+            <button key={e.id} className={`doc-row${sel?.id === e.id ? ' on' : ''}`} title={`${titleOf(e, activeType)} (${e.status.toLowerCase()})`} aria-current={sel?.id === e.id ? 'true' : undefined} onClick={() => leaveThen(() => setSel(e))}>
               <span className="doc-title">{titleOf(e, activeType)}</span>
               {/* the filter above already says which status this is, so the dot only shows when the list mixes both */}
-              {filter === 'ALL' ? <span className={`dot ${e.status.toLowerCase()}`} title={e.status.toLowerCase()} /> : <span />}
+              {filter === 'ALL' ? <span className={`dot ${e.status.toLowerCase()}`} role="img" aria-label={e.status.toLowerCase()} title={e.status.toLowerCase()} /> : <span />}
               <span className="muted doc-date">{new Date(e.updatedAt).toLocaleDateString()}</span>
             </button>
           ))}
@@ -386,7 +386,7 @@ function Editor({ site, type, entry, canEdit, onSaved, onDeleted, onRestored }: 
   const form = (
     <div className="editor-form">
       <FieldForm site={site} path="page" fields={type.fields} data={data} onChange={setData} disabled={!canEdit} />
-      {!single && <div className="fld"><label className="lbl">Slug (optional)</label><input value={slug} disabled={!canEdit} onChange={(e) => setSlug(e.target.value)} placeholder="my-first-post" /></div>}
+      {!single && <div className="fld"><label className="lbl" htmlFor="entry-slug">Slug (optional)</label><input id="entry-slug" value={slug} disabled={!canEdit} onChange={(e) => setSlug(e.target.value)} placeholder="my-first-post" /></div>}
       {err && <p className="err">{err}</p>}
     </div>
   );

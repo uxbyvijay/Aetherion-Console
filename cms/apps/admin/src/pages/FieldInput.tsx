@@ -1,5 +1,5 @@
 import { fieldLabel } from '../lib/fieldLabel';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 import { api, type Field, type Media, type Site } from '../api';
 import { MediaPicker } from './MediaPicker';
 import { IconField } from './IconPicker';
@@ -13,10 +13,11 @@ const TECHNICAL = new Set(['order', 'index', 'startNumber', 'seriesId', 'seriesN
 export function FieldForm({ site, fields, data, onChange, disabled, path, inItem }: {
   site: Site; fields: Field[]; data: Record<string, unknown>; onChange: (next: Record<string, unknown>) => void; disabled?: boolean; path?: string; /** inside a list item: technical fields stay out of sight there */ inItem?: boolean;
 }) {
+  const uid = useId();
   const row = (f: Field) => (
     <div className="fld" key={f.name} data-field-path={path ? `${path}.${f.name}` : undefined}>
-      <label className="lbl">{fieldLabel(f)}{f.required && ' *'}</label>
-      <FieldInput site={site} f={f} path={path ? `${path}.${f.name}` : undefined} value={data[f.name]} onChange={(v) => onChange({ ...data, [f.name]: v })} />
+      <label className="lbl" htmlFor={`${uid}-${f.name}`}>{fieldLabel(f)}{f.required && ' *'}</label>
+      <FieldInput id={`${uid}-${f.name}`} site={site} f={f} path={path ? `${path}.${f.name}` : undefined} value={data[f.name]} onChange={(v) => onChange({ ...data, [f.name]: v })} />
       {f.hint && <small className="muted fld-hint">{f.hint}</small>}
     </div>
   );
@@ -41,22 +42,22 @@ export function FieldForm({ site, fields, data, onChange, disabled, path, inItem
   return <fieldset disabled={disabled}>{blocks}</fieldset>;
 }
 
-export function FieldInput({ site, f, value, onChange, path }: { site: Site; f: Field; value: unknown; onChange: (v: unknown) => void; path?: string }) {
+export function FieldInput({ id, site, f, value, onChange, path }: { /** lets the field's label point at its control */ id?: string; site: Site; f: Field; value: unknown; onChange: (v: unknown) => void; path?: string }) {
   const s = (value as string | undefined) ?? '';
   switch (f.type) {
     case 'textarea':
     case 'richtext':
-      return <textarea rows={f.type === 'richtext' ? 10 : 4} value={s} onChange={(e) => onChange(e.target.value)} />;
+      return <textarea id={id} rows={f.type === 'richtext' ? 10 : 4} value={s} onChange={(e) => onChange(e.target.value)} />;
     case 'number':
-      return <input type="number" value={(value as number | undefined) ?? ''} onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))} />;
+      return <input id={id} type="number" value={(value as number | undefined) ?? ''} onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))} />;
     case 'boolean':
-      return <input type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked)} />;
+      return <input id={id} type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked)} />;
     case 'date':
-      return <input type="date" value={s.slice(0, 10)} onChange={(e) => onChange(e.target.value)} />;
+      return <input id={id} type="date" value={s.slice(0, 10)} onChange={(e) => onChange(e.target.value)} />;
     case 'select':
-      return <select value={s} onChange={(e) => onChange(e.target.value)}><option value="">{f.required ? "Choose…" : "None"}</option>{f.options?.map((o) => <option key={o}>{o}</option>)}</select>;
+      return <select id={id} value={s} onChange={(e) => onChange(e.target.value)}><option value="">{f.required ? "Choose…" : "None"}</option>{f.options?.map((o) => <option key={o}>{o}</option>)}</select>;
     case 'json':
-      return <textarea rows={6} defaultValue={value === undefined ? '' : JSON.stringify(value, null, 2)} onBlur={(e) => { try { onChange(e.target.value ? JSON.parse(e.target.value) : null); } catch { alert('Invalid JSON'); } }} />;
+      return <textarea id={id} rows={6} defaultValue={value === undefined ? '' : JSON.stringify(value, null, 2)} onBlur={(e) => { try { onChange(e.target.value ? JSON.parse(e.target.value) : null); } catch { alert('Invalid JSON'); } }} />;
     case 'image':
       return <ImagePicker site={site} value={s} onChange={onChange} />;
     case 'icon':
@@ -68,7 +69,7 @@ export function FieldInput({ site, f, value, onChange, path }: { site: Site; f: 
     case 'array':
       return <ArrayField site={site} f={f} value={value} onChange={onChange} path={path} />;
     default:
-      return <input value={s} onChange={(e) => onChange(e.target.value)} />;
+      return <input id={id} value={s} onChange={(e) => onChange(e.target.value)} />;
   }
 }
 

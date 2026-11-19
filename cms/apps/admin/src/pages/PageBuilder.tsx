@@ -131,7 +131,7 @@ export function PageBuilder({ site, type, sectionTypes, entry, canEdit, onSaved,
         <>
           <p className="muted">Page settings</p>
           <FieldForm site={site} path="page" fields={type.fields} data={data} disabled={!canEdit} onChange={setData} />
-          {slug !== 'home' && <div className="fld"><label className="lbl">Address</label><input value={slug} disabled={!canEdit} onChange={(e) => setSlug(e.target.value)} placeholder="about-us" /><p className="muted hint">The last part of the page address, for example "about-us" gives /about-us. Use small letters, numbers and dashes.</p></div>}
+          {slug !== 'home' && <div className="fld"><label className="lbl" htmlFor="pb-address">Address</label><input id="pb-address" value={slug} disabled={!canEdit} onChange={(e) => setSlug(e.target.value)} placeholder="about-us" /><p className="muted hint">The last part of the page address, for example "about-us" gives /about-us. Use small letters, numbers and dashes.</p></div>}
         </>
       )}
       {err && <p className="err">{err}</p>}
