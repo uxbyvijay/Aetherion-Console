@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { Site, User } from '../api';
 import { initialsOf, shownEmail } from '../lib/people';
 import { ChangePassword } from './ChangePassword';
-import { clearProfilePic, saveProfilePic, useProfilePic } from '../lib/profilePic';
+import { clearProfilePic, loadPicture, saveCroppedPic, useProfilePic } from '../lib/profilePic';
+import { CropPicture } from './CropPicture';
 
 export function Avatar({ user, size = 30 }: { user: User; size?: number }) {
   const pic = useProfilePic(user.id);
@@ -18,6 +19,7 @@ export function ProfileMenu({ user, site, onSignOut }: { user: User; site?: Site
   const [open, setOpen] = useState(false);
   const [err, setErr] = useState('');
   const [changing, setChanging] = useState(false);
+  const [cropping, setCropping] = useState<{ img: HTMLImageElement; url: string } | null>(null);
   const box = useRef<HTMLDivElement>(null);
   const file = useRef<HTMLInputElement>(null);
   const pic = useProfilePic(user.id);
@@ -34,9 +36,10 @@ export function ProfileMenu({ user, site, onSignOut }: { user: User; site?: Site
   async function pick(f: File | undefined) {
     if (!f) return;
     setErr('');
-    try { await saveProfilePic(user.id, f); } catch (x) { setErr((x as Error).message); }
+    try { setCropping(await loadPicture(f)); } catch (x) { setErr((x as Error).message); }
     if (file.current) file.current.value = '';
   }
+  const closeCrop = () => { if (cropping) URL.revokeObjectURL(cropping.url); setCropping(null); };
 
   return (
     <div className="profile" ref={box}>
@@ -78,6 +81,9 @@ export function ProfileMenu({ user, site, onSignOut }: { user: User; site?: Site
           </ul>
         </div>
       )}
+      {cropping && <CropPicture img={cropping.img} url={cropping.url} onCancel={closeCrop} onDone={(sx, sy, size) => {
+        try { saveCroppedPic(user.id, cropping.img, sx, sy, size); closeCrop(); } catch (x) { setErr((x as Error).message); closeCrop(); }
+      }} />}
       {changing && <ChangePassword onDone={() => setChanging(false)} onClose={() => setChanging(false)} />}
     </div>
   );

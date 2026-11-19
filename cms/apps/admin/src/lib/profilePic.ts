@@ -18,19 +18,23 @@ export function clearProfilePic(userId: string) {
   listeners.forEach((l) => l());
 }
 
-/** Crops the middle square of the picture, shrinks it to 160px and keeps it. Throws a readable message when it cannot. */
-export async function saveProfilePic(userId: string, file: File) {
+/** Reads a chosen file as a picture to crop. Throws a readable message when it cannot. */
+export async function loadPicture(file: File): Promise<{ img: HTMLImageElement; url: string }> {
   if (!file.type.startsWith('image/')) throw new Error('Choose an image file (JPG, PNG or WebP).');
   if (file.size > 10 * 1024 * 1024) throw new Error('That picture is over 10 MB. Choose a smaller one.');
   const url = URL.createObjectURL(file);
   try {
     const img = await new Promise<HTMLImageElement>((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(new Error('That file could not be read as a picture.')); i.src = url; });
-    const side = Math.min(img.width, img.height);
-    const canvas = document.createElement('canvas');
-    canvas.width = canvas.height = 160;
-    canvas.getContext('2d')!.drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, 160, 160);
-    const data = canvas.toDataURL('image/jpeg', 0.86);
-    try { localStorage.setItem(key(userId), data); } catch { throw new Error('This browser would not store the picture (storage is full or blocked).'); }
-    listeners.forEach((l) => l());
-  } finally { URL.revokeObjectURL(url); }
+    return { img, url };
+  } catch (x) { URL.revokeObjectURL(url); throw x; }
+}
+
+/** Keeps the square part of the picture the person chose (a square of `size` source pixels starting at sx, sy), shrunk to 160px. */
+export function saveCroppedPic(userId: string, img: HTMLImageElement, sx: number, sy: number, size: number) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 160;
+  canvas.getContext('2d')!.drawImage(img, sx, sy, size, size, 0, 0, 160, 160);
+  const data = canvas.toDataURL('image/jpeg', 0.86);
+  try { localStorage.setItem(key(userId), data); } catch { throw new Error('This browser would not store the picture (storage is full or blocked).'); }
+  listeners.forEach((l) => l());
 }
