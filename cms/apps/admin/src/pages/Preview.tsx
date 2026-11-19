@@ -80,6 +80,8 @@ function SiteFrame({ url, type, data, sections, slug, status, edit, selectedKey,
   { url: string; edit: boolean } & Omit<Props, 'site' | 'sectionTypes'>) {
   const frame = useRef<HTMLIFrameElement>(null);
   const [loaded, setLoaded] = useState(false);
+  const [shown, setShown] = useState(false); // the site has drawn (it said it is ready, or a moment after it loaded)
+  const [slow, setSlow] = useState(false);
   const origin = (() => { try { return new URL(url).origin; } catch { return null; } })();
   const latest = useRef({ type, data, sections, slug, status, edit, selectedKey, selectedPath });
   latest.current = { type, data, sections, slug, status, edit, selectedKey, selectedPath };
@@ -110,7 +112,7 @@ function SiteFrame({ url, type, data, sections, slug, status, edit, selectedKey,
   useEffect(() => {
     const onMsg = (e: MessageEvent) => {
       if (e.origin !== origin || e.source !== frame.current?.contentWindow || e.data?.source !== 'synx-site') return;
-      if (e.data.kind === 'ready') send();
+      if (e.data.kind === 'ready') { setShown(true); send(); }
       if (e.data.kind === 'navigate' && typeof e.data.path === 'string') onGo.current?.(e.data.path);
       if (e.data.kind === 'select') {
         const { path, key, image } = e.data as { path?: unknown; key?: unknown; image?: unknown };
@@ -121,6 +123,21 @@ function SiteFrame({ url, type, data, sections, slug, status, edit, selectedKey,
     return () => window.removeEventListener('message', onMsg);
   }, [origin]);
 
+  // A white frame while the site starts (or is not running) looks broken: cover it with a message until the site has drawn.
+  useEffect(() => { if (!loaded) return; const t = setTimeout(() => setShown(true), 1500); return () => clearTimeout(t); }, [loaded]);
+  useEffect(() => { const t = setTimeout(() => setSlow(true), 8000); return () => clearTimeout(t); }, []);
+
   if (!origin) return <p className="err pad">The Preview URL is not valid.</p>;
-  return <iframe ref={frame} src={url} title="Site preview" onLoad={() => setLoaded(true)} sandbox="allow-scripts allow-same-origin allow-forms allow-popups" />;
+  return (
+    <>
+      <iframe ref={frame} src={url} title="Site preview" onLoad={() => setLoaded(true)} sandbox="allow-scripts allow-same-origin allow-forms allow-popups" />
+      {!shown && (
+        <div className="pv-loading" role="status">
+          <span className="boot-spin" aria-hidden />
+          <b>Loading your site…</b>
+          {slow && <p className="muted">This is taking longer than usual. Check that the site is running at <code>{origin}</code> (<code>npm run dev</code> in the <code>cms</code> folder), then press Reload above.</p>}
+        </div>
+      )}
+    </>
+  );
 }
