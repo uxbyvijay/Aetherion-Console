@@ -14,11 +14,30 @@ export interface Line { where: string; field?: string; from?: string; to?: strin
 type Doc = Record<string, unknown>;
 type Sec = { id: string; type: string; data: Doc };
 
-const plain = (v: unknown) => {
+/** A value as readable text. Rich text is a list of blocks: show their words, not the raw data. */
+const asText = (v: unknown): string => {
   if (v === undefined || v === null || v === '') return '';
-  const t = typeof v === 'string' ? v : JSON.stringify(v);
-  return t.length > 140 ? t.slice(0, 140) + '…' : t;
+  if (typeof v === 'string') return v;
+  if (Array.isArray(v) && v.length && v.every((i) => i && typeof i === 'object' && typeof (i as { text?: unknown }).text === 'string')) return v.map((i) => (i as { text: string }).text).join(' ¶ ');
+  return JSON.stringify(v);
 };
+/** Before and after as short text. When they are long, only the part that changed is kept, with a little around it, so the difference can be seen. */
+function pair(a: unknown, b: unknown): [string, string] {
+  const x = asText(a);
+  const y = asText(b);
+  if (x.length <= 140 && y.length <= 140) return [x, y];
+  const max = Math.min(x.length, y.length);
+  let p = 0;
+  while (p < max && x[p] === y[p]) p += 1;
+  let s = 0;
+  while (s < max - p && x[x.length - 1 - s] === y[y.length - 1 - s]) s += 1;
+  const around = 40;
+  const part = (t: string) => {
+    const mid = t.slice(p, t.length - s);
+    return (p > around ? '…' : '') + t.slice(Math.max(0, p - around), p) + (mid.length > 140 ? mid.slice(0, 140) + '…' : mid) + t.slice(t.length - s, t.length - s + around) + (s > around ? '…' : '');
+  };
+  return [part(x), part(y)];
+}
 const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 
 /** What would change on the live page: fields that differ, and sections added or removed (sections are matched by key). */
@@ -29,13 +48,13 @@ export function diffDocs(oldData: Doc | null, newData: Doc, sectionName: (type: 
   const n = nrest as Doc;
   const o = orest as Doc;
   for (const k of new Set([...Object.keys(n), ...Object.keys(o)])) {
-    if (!same(o[k], n[k])) out.push({ kind: 'edit', where: docName, field: k, from: plain(o[k]), to: plain(n[k]) });
+    if (!same(o[k], n[k])) { const [from, to] = pair(o[k], n[k]); out.push({ kind: 'edit', where: docName, field: k, from, to }); }
   }
-  for (const s of ns) {
+  for (const [at, s] of ns.entries()) {
     const before = os.find((x) => x.id === s.id);
     if (!before) { out.push({ kind: 'add', where: sectionName(s.type) }); continue; }
     for (const k of new Set([...Object.keys(s.data), ...Object.keys(before.data)])) {
-      if (!same(before.data[k], s.data[k])) out.push({ kind: 'edit', where: sectionName(s.type), field: k, from: plain(before.data[k]), to: plain(s.data[k]) });
+      if (!same(before.data[k], s.data[k])) { const [from, to] = pair(before.data[k], s.data[k]); out.push({ kind: 'edit', where: `${sectionName(s.type)}, section ${at + 1}`, field: k, from, to }); }
     }
   }
   for (const s of os) if (!ns.some((x) => x.id === s.id)) out.push({ kind: 'remove', where: sectionName(s.type) });

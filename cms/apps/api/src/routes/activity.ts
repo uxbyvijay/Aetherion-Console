@@ -6,6 +6,9 @@ import { actorOf, recordChange } from '../activity.js';
 import { mailConfigured, sendTest } from '../mailer.js';
 import { diffDocs } from '../agent/publish.js';
 
+/** Fields that only position or number things (the same list the editor keeps under "Advanced"), plus the parent of a page. */
+const TECHNICAL_FIELDS = ['order', 'index', 'startNumber', 'seriesId', 'seriesName', 'termId', 'nested', 'path', 'linkedinUrl', 'parent'];
+
 /** The bell (recent changes, email setting) and version history of a document. */
 export default async function (app: FastifyInstance) {
   app.get('/sites/:siteId/notifications', { preHandler: requireSite('VIEWER') }, async (req) => {
@@ -46,7 +49,7 @@ export default async function (app: FastifyInstance) {
     ]);
     const sectionName = (slug: string) => types.find((t) => t.slug === slug)?.name ?? slug;
     const label = (st: string) => (st === 'PUBLISHED' ? 'Published' : 'Draft');
-    return rows.map((v, i) => {
+    const out = rows.map((v, i) => {
       const prev = rows[i + 1];
       const kind = types.find((t) => t.name === v.typeName)?.kind;
       const changes: { kind: string; where: string; field?: string; from?: string; to?: string }[] = [];
@@ -58,13 +61,23 @@ export default async function (app: FastifyInstance) {
         const n = Array.isArray((v.data as { sections?: unknown[] }).sections) ? (v.data as { sections: unknown[] }).sections.length : 0;
         if (n) changes.push({ kind: 'add', where: `${n} section${n === 1 ? '' : 's'}` });
       }
+      // Positions, parents and other technical fields are not content: leave them out of the list. A save that only moved those is not a version worth showing.
+      const type = types.find((t) => t.name === v.typeName);
+      const technical = new Set([...TECHNICAL_FIELDS, ...(((type?.fields ?? []) as { name: string; advanced?: boolean }[]).filter((f) => f.advanced).map((f) => f.name))]);
+      const docLevel = kind === 'page' ? 'Page settings' : v.typeName;
+      const content = changes.filter((c) => !(c.kind === 'edit' && c.field && c.where === docLevel && technical.has(c.field)));
+      const onlyTechnical = !!prev && v.action === 'edited' && changes.length > 0 && content.length === 0;
+      // the newest version is always listed (it is the current one), with whatever it changed
+      const shown = onlyTechnical && i === 0 ? changes : content;
       return {
         id: v.id, action: v.action, summary: v.summary, status: v.status, source: v.source, title: v.title, createdAt: v.createdAt,
         // their name as it is now, so a person renamed since (or the built-in user) shows the right name on old versions too
         actorName: users.find((u) => u.id === v.actorId)?.name ?? v.actorName,
-        changes: changes.slice(0, 40), changeCount: changes.length,
+        changes: shown.slice(0, 40), changeCount: shown.length,
+        hide: onlyTechnical && i > 0,
       };
     });
+    return out.filter((v) => !v.hide).map(({ hide: _hide, ...rest }) => rest);
   });
 
   /** Puts an older version's content back. The document keeps its current status (a draft stays a draft). The restore itself becomes a new version. */
