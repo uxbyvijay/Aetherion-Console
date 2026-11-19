@@ -143,7 +143,7 @@ export default function App() {
     <div className="app">
       <header className="topbar">
         <div className="top-left">
-          <strong className="brand">Aetherion Console</strong>
+          <strong className="brand"><img className="brand-mark" src="/aetherion-mark.png" alt="" width="28" height="28" />Aetherion Console</strong>
           <select className="site-select" aria-label="Site" value={siteId} onChange={(e) => { const id = e.target.value; leaveThen(() => setSiteId(id)); }}>
             {sites.map((s) => <option key={s.id} value={s.id}>{s.domains[0] ?? s.name}</option>)}
             {!sites.length && <option value="">No sites</option>}

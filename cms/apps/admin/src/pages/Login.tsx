@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { api, setToken, type User } from '../api';
 import { PasswordInput } from '../lib/password';
 
@@ -39,6 +39,24 @@ function GoogleButton({ clientId, onCredential }: { clientId: string; onCredenti
 }
 
 /** Forgot password: the person asks for a 6-digit code by email, then types it with a new password. */
+/** Sign-in layout: the logo on the left, the form on the right. On a phone the logo shrinks to a small icon above the form. */
+function AuthShell({ children }: { children: ReactNode }) {
+  return (
+    <div className="auth-split">
+      <aside className="auth-art" aria-hidden="true">
+        <img src="/aetherion-logo.png" alt="" />
+        <div className="auth-art-text"><b>Aetherion Console</b><span>Write boldly. A human will catch you before the internet does.</span></div>
+      </aside>
+      <main className="auth-pane">
+        <div className="auth-box">
+          <img className="auth-mobile-logo" src="/aetherion-mark.png" alt="" width="72" height="72" />
+          {children}
+        </div>
+      </main>
+    </div>
+  );
+}
+
 function ForgotPassword({ start, onBack, onDone }: { start: string; onBack: () => void; onDone: (email: string) => void }) {
   const [step, setStep] = useState<'email' | 'code'>('email');
   const [email, setEmail] = useState(start);
@@ -72,7 +90,7 @@ function ForgotPassword({ start, onBack, onDone }: { start: string; onBack: () =
     setBusy(false);
   }
 
-  return step === 'email' ? (
+  return <AuthShell>{step === 'email' ? (
     <form className="card login" onSubmit={send}>
       <h1>Forgot your password?</h1>
       <p className="muted">Enter your email and we send you a 6-digit code.</p>
@@ -87,7 +105,7 @@ function ForgotPassword({ start, onBack, onDone }: { start: string; onBack: () =
       <h1>Enter your code</h1>
       {info && <p className="muted">{info}</p>}
       {!start && !email && <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />}
-      <input className="code-input" inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="6-digit code" value={code} onChange={(e) => setCode(e.target.value.replace(/D/g, ''))} autoFocus required />
+      <input className="code-input" inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="6-digit code" value={code} onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, ''))} autoFocus required />
       <PasswordInput placeholder="New password (8 or more characters)" minLength={8} value={pw} onChange={setPw} required />
       <PasswordInput placeholder="Confirm new password" value={again} onChange={setAgain} required />
       {again && pw !== again && <p className="err">The two passwords are not the same.</p>}
@@ -96,7 +114,7 @@ function ForgotPassword({ start, onBack, onDone }: { start: string; onBack: () =
       <button type="button" className="link login-forgot center" disabled={busy || !email.trim()} onClick={() => send()}>Send a new code</button>
       <button type="button" className="link login-forgot center" onClick={onBack}>Back to sign in</button>
     </form>
-  );
+  )}</AuthShell>;
 }
 
 export function Login({ onDone }: { onDone: (u: User) => void }) {
@@ -139,8 +157,9 @@ export function Login({ onDone }: { onDone: (u: User) => void }) {
   }
 
   return (
+    <AuthShell>
     <form className="card login" onSubmit={submit}>
-      <h1>Aetherion Console</h1>
+      <h1>{setup ? 'Welcome' : 'Sign in'}</h1>
       <p className="muted">{setup ? 'Create the first admin account.' : 'Sign in to continue.'}</p>
       {setup && <input placeholder="Name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required />}
       <input type="email" placeholder="Email" autoComplete="username" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} required />
@@ -156,5 +175,6 @@ export function Login({ onDone }: { onDone: (u: User) => void }) {
         </>
       )}
     </form>
+    </AuthShell>
   );
 }
