@@ -54,6 +54,10 @@ Described in [github-publishing.md](github-publishing.md). In short: Settings, W
 
 One open pull request per website at a time: merge or close it on GitHub before pushing again.
 
+## Keeping the site previews in step with the repositories
+
+The previews in `apps/` are copies of the four Synx-Tools repositories, adapted to read their content from the CMS. `npm run sync:sites` brings other developers' changes into them: it fetches the repositories from GitHub (nothing to pull by hand, your own clones are not touched), three-way merges the changes since the last sync into each preview file, copies new pictures and videos, and lists anything it cannot merge safely under REVIEW. Add `-- --apply` to write the changes, `-- --site rtw` for one site. It runs by itself with `--apply` every time you start `npm run dev`. The last synced commit is kept in `apps/<site>/.repo-sync.json`. A file listed under REVIEW (for example a Next.js page the preview builds from CMS content) has to be ported by a person; the marker does not move until that is done.
+
 ## Tests
 
 There is no automated test suite yet. What has been checked by hand and by script: type checks for all six apps (`npx tsc --noEmit -p .` in each), an API run covering sign-in, roles, sites, types, entries, public API, media and the GitHub routes, and a click-through of the admin. Adding these as a real suite (for example Vitest on the API) is a good first task.

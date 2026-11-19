@@ -15,7 +15,9 @@
     "dev:synx": "npm run dev -w apps/synx-tools",
     "dev:skalle": "npm run dev -w apps/skalle",
     "dev:rtw": "npm run dev -w apps/rtw",
-    "mcp:public": "npm run gateway -w apps/api"
+    "mcp:public": "npm run gateway -w apps/api",
+    "sync:sites": "node scripts/sync-sites.mjs",
+    "predev": "node scripts/sync-sites.mjs --apply"
   },
   "devDependencies": {
     "concurrently": "^10.0.6"
