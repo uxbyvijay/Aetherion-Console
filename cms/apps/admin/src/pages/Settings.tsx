@@ -7,10 +7,11 @@ import { Connectors } from './Connectors';
 import { AiToolsConnect } from './AiToolsConnect';
 import { LinkedinSetup } from './LinkedinSetup';
 import { GithubConnect } from './GithubConnect';
+import { ActivityLog } from './ActivityLog';
 
 interface Props { /** a message to show on the LinkedIn page after LinkedIn sent the person back */ notice?: { ok: boolean; message: string }; user: User; site?: Site; sites: Site[]; reload: () => Promise<void>; onSelect: (id: string) => void; /** Goes back to the screen Settings was opened from. */ onBack?: () => void; backLabel?: string; /** Shown in a right panel instead of a whole page. */ panel?: boolean }
 /** The menu is about the whole CMS. Each website's own settings live inside "Websites". */
-type Section = 'ai' | 'tools' | 'sites' | 'team';
+type Section = 'ai' | 'tools' | 'sites' | 'team' | 'log';
 type SiteTab = 'website' | 'tools' | 'linkedin' | 'github' | 'connect';
 
 const KEY = 'cms_settings_section';
@@ -18,6 +19,7 @@ const ICONS: Record<Section, ReactNode> = {
   ai: <><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" /><path d="M19 16v4M17 18h4" /></>,
   tools: <><path d="M9 3v5M15 3v5" /><path d="M6 8h12v4a6 6 0 0 1-12 0z" /><path d="M12 18v3" /></>,
   team: <><circle cx="9" cy="8" r="3.2" /><path d="M3 20a6 6 0 0 1 12 0" /><path d="M16 5.2a3.2 3.2 0 0 1 0 5.6M18 14.5a6 6 0 0 1 3 5.5" /></>,
+  log: <><path d="M8 6h12M8 12h12M8 18h12" /><path d="M4 6h.01M4 12h.01M4 18h.01" /></>,
   sites: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18" /><path d="M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></>,
 };
 const list = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean);
@@ -44,6 +46,7 @@ export function Settings(props: Props) {
     { id: 'tools', label: 'Connect AI tools', show: allSites },
     { id: 'sites', label: 'Websites', show: canEditAny },
     { id: 'team', label: 'User management', show: user.isSuperAdmin },
+    { id: 'log', label: 'Activity log', show: user.isSuperAdmin },
   ];
   const visible = sections.filter((s) => s.show);
 
@@ -149,6 +152,9 @@ export function Settings(props: Props) {
 
           {/* ---------- User management ---------- */}
           {current?.id === 'team' && user.isSuperAdmin && <UserManagement me={user} />}
+
+          {/* ---------- Activity log ---------- */}
+          {current?.id === 'log' && user.isSuperAdmin && <ActivityLog sites={sites} />}
 
           {/* ---------- Websites: the list, and each website's own settings ---------- */}
           {current?.id === 'sites' && !target && (

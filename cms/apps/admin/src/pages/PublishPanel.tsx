@@ -32,9 +32,28 @@ export function PublishPanel({ site }: { site: Site }) {
   };
   useEffect(() => { setDone(null); setNote(''); load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [site.id]);
 
+  // While a pull request is open, check its status again when the person returns to this tab and every minute, so a merge on GitHub shows up without a reload.
+  const hasOpen = history.some((h) => h.state === 'pending' || h.state === 'approved' || h.state === 'changes_requested');
+  useEffect(() => {
+    if (!hasOpen) return;
+    const refresh = async () => {
+      if (document.visibilityState !== 'visible') return;
+      try {
+        const h = await api<PrRec[]>(`/sites/${site.id}/publish/history`);
+        setHistory(h);
+        if (!h.some((x) => x.state === 'pending' || x.state === 'approved' || x.state === 'changes_requested')) load(); // it was merged or closed: the list of changes is different now
+      } catch { /* keep what is shown */ }
+    };
+    const t = setInterval(refresh, 60_000);
+    window.addEventListener('focus', refresh);
+    return () => { clearInterval(t); window.removeEventListener('focus', refresh); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasOpen, site.id]);
+
   const toggle = (p: string) => setPicked((s) => { const n = new Set(s); if (n.has(p)) n.delete(p); else n.add(p); return n; });
   const sel = review?.changes.filter((c) => picked.has(c.path)) ?? [];
   const count = (s: string) => sel.filter((c) => c.status === s).length;
+  const open = history.find((h) => h.state === 'pending' || h.state === 'approved' || h.state === 'changes_requested');
 
   const push = async () => {
     if (!review || !sel.length) return;
@@ -61,6 +80,22 @@ export function PublishPanel({ site }: { site: Site }) {
       {err && <p className="error">{err}</p>}
       {done && <p className="pub-done">Pull request #{done.number} is open: <a href={done.url} target="_blank" rel="noreferrer">{done.url}</a>. A person now reviews and merges it on GitHub.</p>}
 
+      {history.length > 0 && (
+        <div className="pub-history">
+          <h4>Pull requests</h4>
+          <ul>
+            {history.map((h) => (
+              <li key={h.id}>
+                <span className={`pub-state ${h.state ?? 'unknown'}`}>{h.state ? STATE[h.state] : 'Status unavailable'}</span>
+                <a href={h.url} target="_blank" rel="noreferrer">#{h.number} {h.title}</a>
+                <span className="muted"> {h.files.length} file{h.files.length === 1 ? '' : 's'}, {h.createdBy}, {new Date(h.createdAt).toLocaleString()}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+
       {!review && busy && <p className="muted">Comparing with {site.name}'s repository…</p>}
       {review && (
         <>
@@ -74,6 +109,8 @@ export function PublishPanel({ site }: { site: Site }) {
                   <button type="button" className="link" onClick={() => setPicked(new Set(review.changes.map((c) => c.path)))}>All</button>
                   <button type="button" className="link" onClick={() => setPicked(new Set())}>None</button>
                 </div>
+                <details className="more pub-changes" open={!open} key={open ? 'open-pr' : 'no-pr'}>
+                  <summary>{open ? `${review.changes.length} change${review.changes.length === 1 ? '' : 's'} not in the repository yet` : 'Review the files'}</summary>
                 <ul className="pub-list">
                   {review.changes.map((c) => (
                     <li key={c.path}>
@@ -92,30 +129,17 @@ export function PublishPanel({ site }: { site: Site }) {
                 <ul className="pub-checks">
                   {(failed ?? review.checks).map((c) => <li key={c.id} className={c.ok ? 'ok' : c.blocking ? 'bad' : 'info'}><b>{c.ok ? 'Passed' : c.blocking ? 'Failed' : 'Note'}:</b> {c.label}{c.detail && <span className="muted"> {c.detail}</span>}</li>)}
                 </ul>
-                <label>What is this update for? (optional, shown in the pull request) <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} placeholder="e.g. New pricing page copy" /></label>
+                </details>
+                {!open && <label>What is this update for? (optional, shown in the pull request) <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} placeholder="e.g. New pricing page copy" /></label>}
+                {open && <p className="muted">Pull request <a href={open.url} target="_blank" rel="noreferrer">#{open.number}</a> is still open. Merge or close it on GitHub, then press Refresh to push again.</p>}
                 <div className="row-actions">
-                  <button className="primary" disabled={busy || !sel.length} onClick={push}>Final Push</button>
+                  <button className="primary" disabled={busy || !sel.length || !!open} onClick={push}>Final Push</button>
                   <button disabled={busy} onClick={load}>Refresh</button>
                 </div>
               </>
             )}
           {review.changes.length === 0 && <div className="row-actions"><button disabled={busy} onClick={load}>Refresh</button></div>}
         </>
-      )}
-
-      {history.length > 0 && (
-        <div className="pub-history">
-          <h4>Pull requests</h4>
-          <ul>
-            {history.map((h) => (
-              <li key={h.id}>
-                <span className={`pub-state ${h.state ?? 'unknown'}`}>{h.state ? STATE[h.state] : 'Status unavailable'}</span>
-                <a href={h.url} target="_blank" rel="noreferrer">#{h.number} {h.title}</a>
-                <span className="muted"> {h.files.length} file{h.files.length === 1 ? '' : 's'}, {h.createdBy}, {new Date(h.createdAt).toLocaleString()}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
       )}
     </div>
   );

@@ -22,6 +22,15 @@ export default async function (app: FastifyInstance) {
 
   app.get('/github/repos', { preHandler: requireSuperAdmin }, async () => guard(listRepos));
 
+  /** Branches of a repository in the allowed list, so the connect form can offer them before a site is linked. Other repositories are refused. */
+  app.get('/github/repos/:owner/:repo/branches', { preHandler: requireSuperAdmin }, async (req) => {
+    const { owner, repo } = req.params as { owner: string; repo: string };
+    const known = await guard(listRepos);
+    const hit = known.find((r) => r.owner.toLowerCase() === owner.toLowerCase() && r.name.toLowerCase() === repo.toLowerCase());
+    if (!hit) throw Object.assign(new Error('That repository is not available to this console.'), { statusCode: 404 });
+    return guard(() => listBranches(hit.owner, hit.name));
+  });
+
   app.get('/sites/:siteId/github', { preHandler: requireSuperAdmin }, async (req) => {
     const { siteId } = req.params as { siteId: string };
     return (await prisma.githubLink.findUnique({ where: { siteId } })) ?? null;
@@ -75,6 +84,15 @@ export default async function (app: FastifyInstance) {
     const l = await linkOf((req.params as { siteId: string }).siteId);
     const q = z.object({ ref: z.string().optional(), dir: z.string().optional() }).parse(req.query);
     return guard(() => listFiles(l.owner, l.repo, q.ref ?? l.baseBranch, q.dir ?? ''));
+  });
+
+  /** Recent admin actions across every website (or one), newest first, with the website's name. */
+  app.get('/audit', { preHandler: requireSuperAdmin }, async (req) => {
+    const q = z.object({ siteId: z.string().optional(), limit: z.coerce.number().int().min(1).max(500).default(100) }).parse(req.query);
+    const rows = await prisma.auditLog.findMany({ where: q.siteId ? { siteId: q.siteId } : {}, orderBy: { createdAt: 'desc' }, take: q.limit });
+    const sites = await prisma.site.findMany({ select: { id: true, name: true } });
+    const names = new Map(sites.map((s) => [s.id, s.name]));
+    return rows.map((r) => ({ ...r, siteName: r.siteId ? names.get(r.siteId) ?? null : null }));
   });
 
   /** Recent admin actions for a website (connect, disconnect, and later pushes). */

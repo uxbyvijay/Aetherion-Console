@@ -42,10 +42,14 @@ export function GithubConnect({ site }: { site: Site }) {
   useEffect(() => {
     const r = repos.find((x) => x.fullName === repo);
     if (!r || !editing) return;
-    // branches of a repo that is not linked yet are read through the repository list's default branch only
+    let stale = false;
     setBranches([{ name: r.defaultBranch, protected: false }]);
-    setBranch((b) => (b === 'main' || b === link?.baseBranch ? b : r.defaultBranch));
-    if (!link || `${link.owner}/${link.repo}` !== r.fullName) setBranch(r.defaultBranch);
+    const same = !!link && `${link.owner}/${link.repo}` === r.fullName;
+    setBranch(same ? link!.baseBranch : r.defaultBranch);
+    api<Branch[]>(`/github/repos/${r.owner}/${r.name}/branches`)
+      .then((bs) => { if (!stale && bs.length) setBranches(bs); })
+      .catch((x) => { if (!stale) setErr((x as Error).message); });
+    return () => { stale = true; };
   }, [repo, repos, editing, link]);
 
   const act = async (fn: () => Promise<unknown>) => { setBusy(true); setErr(''); try { await fn(); } catch (x) { setErr((x as Error).message); } setBusy(false); };
@@ -111,7 +115,12 @@ export function GithubConnect({ site }: { site: Site }) {
               {repos.map((r) => <option key={r.fullName} value={r.fullName} disabled={!r.canPush}>{r.fullName}{r.private ? ' (private)' : ''}{r.canPush ? '' : ' – no write access'}</option>)}
             </select>
           </label>
-          <label>Base branch <input value={branch} onChange={(e) => setBranch(e.target.value)} placeholder={picked?.defaultBranch ?? 'main'} required /></label>
+          <label>Base branch
+            <select value={branch} onChange={(e) => setBranch(e.target.value)} required>
+              {!branches.some((b) => b.name === branch) && <option value={branch}>{branch}</option>}
+              {branches.filter((b) => !b.name.startsWith('aetherion/')).map((b) => <option key={b.name} value={b.name}>{b.name}{b.name === picked?.defaultBranch ? ' (default)' : ''}{b.protected ? ' (protected)' : ''}</option>)}
+            </select>
+          </label>
           <label>Content folder <input value={dir} onChange={(e) => setDir(e.target.value)} placeholder="content" required /></label>
           <p className="muted">The console only ever writes inside this folder of the repository.</p>
           <div className="row-actions">

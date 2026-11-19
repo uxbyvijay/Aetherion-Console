@@ -42,6 +42,14 @@ export default async function (app: FastifyInstance) {
     const who = await prisma.user.findUnique({ where: { id: req.user.sub }, select: { name: true } });
     const actor = { id: req.user.sub, name: who?.name ?? 'An admin' };
 
+    // One open pull request per website: until it is merged or closed the repository still lacks those files, so a second push would only duplicate them.
+    const recent = await prisma.publishRecord.findMany({ where: { siteId, owner: l.owner, repo: l.repo, baseBranch: l.baseBranch }, orderBy: { createdAt: 'desc' }, take: 5 });
+    for (const r of recent) {
+      let st: PrState | null = null;
+      try { st = await pullRequestState(r.owner, r.repo, r.prNumber); } catch { /* GitHub unreachable: do not block on a status we cannot read */ }
+      if (st === 'pending' || st === 'approved' || st === 'changes_requested') throw fail(`Pull request #${r.prNumber} for this website is still open. Merge or close it on GitHub first, then push again.`, 409);
+    }
+
     const all = await guard(() => computeChanges(siteId, l));
     const wanted = new Set(b.paths);
     const unknown = b.paths.filter((p) => !all.some((c) => c.path === p));
