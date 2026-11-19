@@ -1,5 +1,5 @@
 body:has(.ink-library) {
-  background: #fff;
+  background: #05060c;
 }
 
 .ink-library {
@@ -8,7 +8,7 @@ body:has(.ink-library) {
   position: relative;
   min-height: calc(100svh - 3.2rem);
   padding-bottom: 4.5rem;
-  background: var(--paper);
+  background: transparent;
   color: var(--ink);
   color-scheme: light;
   font-family: var(--font-comic-body), "Comic Sans MS", "Chalkboard SE", cursive;
@@ -70,6 +70,7 @@ body:has(.ink-library) {
   letter-spacing: 0.22em;
   text-transform: uppercase;
   font-size: 0.95rem;
+  color: #f3efe6;
 }
 
 .ink-mast h1 {
@@ -80,6 +81,8 @@ body:has(.ink-library) {
   line-height: 0.78;
   letter-spacing: 0.01em;
   text-align: center;
+  color: #fff;
+  text-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
 }
 
 .ink-lede {
@@ -88,6 +91,8 @@ body:has(.ink-library) {
   font-size: 1.05rem;
   line-height: 1.4;
   text-align: center;
+  color: #f3efe6;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.7);
 }
 
 .ink-rack {
@@ -317,18 +322,49 @@ body:has(.ink-library) {
   cursor: pointer;
 }
 
+.ink-space {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background: #05060c url("/chronicles/space-still.jpg") center / cover no-repeat;
+  pointer-events: none;
+}
+
+.ink-library.is-reading .ink-space {
+  z-index: 29;
+}
+
+.ink-space video,
+.ink-space img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 .ink-library.is-reading .ink-backdrop {
   z-index: 30;
-  background: #fff;
+  background: transparent;
+}
+
+.ink-library.is-reading .ink-running,
+.ink-library.is-reading .ink-count {
+  color: #f4f1ea;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.8);
 }
 
 .ink-library.is-reading .ink-reader {
   z-index: 31;
 }
 
+.ink-library.is-focus .ink-space {
+  z-index: 79;
+}
+
 .ink-library.is-focus .ink-backdrop {
   z-index: 80;
-  background: #000;
+  background: transparent;
   cursor: default;
 }
 
@@ -1247,6 +1283,7 @@ body:has(.ink-print)::before {
 .ink-print {
   min-height: 100vh;
   padding: 1.5rem 0 3rem;
+  background: #fff;
 }
 
 .ink-print-bar {

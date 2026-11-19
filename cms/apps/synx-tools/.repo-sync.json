@@ -1,0 +1,5 @@
+{
+  "repo": "Synx",
+  "commit": "f9d775fce8656cd9fd6a1f1290e4110e8f06d761",
+  "note": "2026-11-19: the only change since f1ef601 reverts an article in the repo code; articles come from the CMS here, so nothing to port. Decide separately whether to unpublish ai-is-friend-or-foe."
+}

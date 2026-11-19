@@ -70,6 +70,7 @@ export function Chronicles({ className = "", initialSlug, head }: { className?: 
   const [readingPage, setReadingPage] = useState(1);
   const [lead, setLead] = useState<ReadableIssue>(() => findIssue(initialSlug ?? "") ?? readable(shelf[0])[0]);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const spaceRef = useRef<HTMLVideoElement>(null);
 
   const pages = lead.pages;
   const spreadCount = Math.max(1, Math.ceil(pages.length / 2));
@@ -227,6 +228,19 @@ export function Chronicles({ className = "", initialSlug, head }: { className?: 
   }, [turn]);
 
   useEffect(() => {
+    const video = spaceRef.current;
+    if (reduce || !video) return;
+    const play = () => {
+      if (document.hidden) return;
+      video.playbackRate = 0.65;
+      void video.play().catch(() => {});
+    };
+    play();
+    document.addEventListener("visibilitychange", play);
+    return () => document.removeEventListener("visibilitychange", play);
+  }, [reduce]);
+
+  useEffect(() => {
     if (!toast) return;
     const id = window.setTimeout(() => setToast(null), 2200);
     return () => window.clearTimeout(id);
@@ -371,6 +385,22 @@ export function Chronicles({ className = "", initialSlug, head }: { className?: 
 
   return (
     <div className={`ink-library${className ? ` ${className}` : ""}${open ? " is-reading" : ""}${focused ? " is-focus" : ""}`}>
+      <div className="ink-space" aria-hidden="true">
+        {reduce ? (
+          <img src="/chronicles/space-still.jpg" alt="" />
+        ) : (
+          <video
+            ref={spaceRef}
+            autoPlay
+            muted
+            loop
+            playsInline
+            poster="/chronicles/space-still.jpg"
+          >
+            <source src="/chronicles/space-loop.mp4" type="video/mp4" />
+          </video>
+        )}
+      </div>
       <header className="ink-mast" aria-hidden={open}>
         <p className="ink-kicker">{head?.kicker}</p>
         <div className="ink-mast-row">
