@@ -53,6 +53,7 @@ model Site {
   connectors   Connector[]
   mcpKeys      McpKey[]
   githubLink   GithubLink?
+  analyticsLink AnalyticsLink?
   publishes    PublishRecord[]
   createdAt    DateTime      @default(now())
 }
@@ -261,4 +262,18 @@ model PublishRecord {
   createdAt  DateTime @default(now())
 
   @@index([siteId, createdAt])
+}
+
+/// Where a website's visitor numbers come from (Google Analytics 4). The service account file is stored encrypted and never leaves the server.
+model AnalyticsLink {
+  siteId      String   @id
+  site        Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  /// always ga4 (kept as a column so another source could be added later)
+  provider    String
+  /// not secret: { propertyId }
+  settings    Json     @default("{}")
+  /// the GA4 service account file, encrypted
+  secretEnc   String?
+  connectedBy String
+  createdAt   DateTime @default(now())
 }

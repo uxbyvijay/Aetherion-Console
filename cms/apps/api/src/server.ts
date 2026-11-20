@@ -22,6 +22,7 @@ import activity from './routes/activity.js';
 import linkedin from './routes/linkedin.js';
 import github from './routes/github.js';
 import publish from './routes/publish.js';
+import analytics from './routes/analytics.js';
 import { startMailer } from './mailer.js';
 
 const secret = process.env.JWT_SECRET;
@@ -101,6 +102,7 @@ await app.register(activity);
 await app.register(linkedin);
 await app.register(github);
 await app.register(publish);
+await app.register(analytics);
 startMailer();
 
 const port = Number(process.env.PORT ?? 4000);
