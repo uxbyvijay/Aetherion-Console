@@ -8,13 +8,14 @@ import { LivePreview } from './pages/LivePreview';
 import { Types } from './pages/Types';
 import { MediaLibrary } from './pages/MediaLibrary';
 import { Settings } from './pages/Settings';
+import { Analytics } from './pages/Analytics';
 import { ProfileMenu } from './pages/ProfileMenu';
 import { useAiOpen } from './lib/assistant';
 import { useHistoryTarget } from './lib/versions';
 import { History } from './pages/History';
 import { NotificationsBell } from './pages/NotificationsBell';
 
-type View = 'structure' | 'preview' | 'media' | 'types' | 'settings';
+type View = 'structure' | 'preview' | 'analytics' | 'media' | 'types' | 'settings';
 const MAIN: { id: View; label: string }[] = [
   { id: 'structure', label: 'Structure' },
   { id: 'preview', label: 'Preview' },
@@ -36,7 +37,9 @@ export default function App() {
   viewRef.current = view;
   const [back, setBack] = useState<View>('structure'); // where Settings goes back to: the screen you opened it from
   /** Settings is a page of its own. Opening it remembers the screen to go back to. */
-  const openSettings = () => { const v = viewRef.current; if (v === 'settings') return; setBack(v === 'preview' ? 'preview' : 'structure'); setView('settings'); setVersionsOpen(false); };
+  const openSettings = () => { const v = viewRef.current; if (v === 'settings') return; if (v === 'preview' || v === 'structure') setBack(v); else if (v !== 'analytics') setBack('structure'); setView('settings'); setVersionsOpen(false); };
+  /** Analytics is a page of its own too, opened from the icon beside Settings; it goes back the same way. */
+  const openAnalytics = () => { const v = viewRef.current; if (v === 'analytics') return; if (v === 'preview' || v === 'structure') setBack(v); else if (v !== 'settings') setBack('structure'); setView('analytics'); setVersionsOpen(false); };
   // LinkedIn sends the person back here after they allow (or refuse) the connection
   const [liNotice, setLiNotice] = useState<{ ok: boolean; message: string } | undefined>(() => {
     const q = new URLSearchParams(location.search);
@@ -58,7 +61,7 @@ export default function App() {
   }, []);
   useEffect(() => { if (!versions) setVersionsOpen(false); }, [versions]);
   useEffect(() => {
-    if (view !== 'settings') return;
+    if (view !== 'settings' && view !== 'analytics') return;
     const onKey = (e: KeyboardEvent) => {
       const typing = (e.target as HTMLElement | null)?.closest?.('input, textarea, select');
       if (e.key === 'Escape' && !typing && !document.querySelector('.dialog')) setView(back);
@@ -138,6 +141,7 @@ export default function App() {
   const canEdit = site?.role !== 'VIEWER';
   const workspace = view === 'structure' || view === 'preview';
   const toggleSettings = () => { if (view === 'settings') { setView(back); return; } leaveThen(openSettings); };
+  const toggleAnalytics = () => { if (view === 'analytics') { setView(back); return; } leaveThen(openAnalytics); };
 
   return (
     <div className="app">
@@ -164,6 +168,11 @@ export default function App() {
               <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 4v5h5" /><path d="M12 7.5V12l3 2" /></svg>
             </button>
           )}
+          {site && (
+            <button className={`top-icon${view === 'analytics' ? ' on' : ''}`} aria-label="Analytics" aria-pressed={view === 'analytics'} data-tip={view === 'analytics' ? 'Close analytics' : 'Analytics'} onClick={toggleAnalytics}>
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M4 20V11M10 20V4M16 20v-7M22 20H2" /></svg>
+            </button>
+          )}
           {site && <NotificationsBell key={site.id} site={site} isAdmin={user.isSuperAdmin} />}
           {(
             <button className={`top-icon${view === 'settings' ? ' on' : ''}`} aria-label="Settings" aria-pressed={view === 'settings'} data-tip={view === 'settings' ? 'Close settings' : 'Settings'} onClick={toggleSettings}>
@@ -185,6 +194,8 @@ export default function App() {
           view === 'structure'
             ? <Structure key={site!.id} site={site!} canEdit={canEdit} goTypes={() => setView('types')} />
             : <LivePreview key={site!.id} site={site!} canEdit={canEdit} />
+        ) : view === 'analytics' ? (
+          <Analytics key={site!.id} site={site!} user={user} onSelect={setSiteId} />
         ) : view === 'types' ? (
           <Types key={site!.id} site={site!} canAdmin={canAdmin} />
         ) : view === 'media' ? (
