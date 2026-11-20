@@ -58,6 +58,16 @@ One open pull request per website at a time: merge or close it on GitHub before 
 
 The previews in `apps/` are copies of the four Synx-Tools repositories, adapted to read their content from the CMS. `npm run sync:sites` brings other developers' changes into them: it fetches the repositories from GitHub (nothing to pull by hand, your own clones are not touched), three-way merges the changes since the last sync into each preview file, copies new pictures and videos, and lists anything it cannot merge safely under REVIEW. Add `-- --apply` to write the changes, `-- --site rtw` for one site. It runs by itself with `--apply` every time you start `npm run dev`. The last synced commit is kept in `apps/<site>/.repo-sync.json`. A file listed under REVIEW (for example a Next.js page the preview builds from CMS content) has to be ported by a person; the marker does not move until that is done.
 
+## Analytics
+
+The **Analytics** icon (beside Settings, top right) shows visitor numbers per website, or all websites together, from **Google Analytics 4**. The CMS keeps no visitor data of its own: it asks Google and remembers the answer for 5 minutes (Google's daily request limits are small).
+
+- A super admin connects a website on the Analytics page with two things: the numeric GA4 **property ID**, and a Google **service account** key file (.json). Setup: in Google Cloud make a service account, turn on the Google Analytics Data API, make a JSON key; in Google Analytics add the account's email as a Viewer of the property. The page shows these steps.
+- The connection is checked with Google before it is saved. The file is stored encrypted (same method as AI keys) and is never sent to the browser.
+- Anyone who can open a website can read its numbers. Only super admins can connect or disconnect. Both are written to the Activity log.
+- Tested with Google's responses faked (token signing, the six report queries, error messages) and once against the real Google with a made-up key, which was refused with a readable message. It has **not** been run with a real service account and property yet.
+- The websites themselves must already send data to GA4: the tracking snippet is not added by the CMS.
+
 ## Tests
 
 There is no automated test suite yet. What has been checked by hand and by script: type checks for all six apps (`npx tsc --noEmit -p .` in each), an API run covering sign-in, roles, sites, types, entries, public API, media and the GitHub routes, and a click-through of the admin. Adding these as a real suite (for example Vitest on the API) is a good first task.
