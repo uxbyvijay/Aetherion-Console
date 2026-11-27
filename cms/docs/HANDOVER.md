@@ -9,7 +9,7 @@ This page is what a new developer needs to run it, and what is still open.
 | --- | --- | --- |
 | `apps/api` | Fastify + Prisma + Postgres API | 4000 |
 | `apps/admin` | React 19 + Vite admin | 5173 |
-| `apps/morph-space`, `synx-tools`, `skalle`, `rtw` | Site previews that read the CMS | 5180 to 5183 |
+| `apps/morph.space`, `apps/synx.tools`, `apps/skalle.ai`, `apps/realtimeweb.org` | Site previews that read the CMS | 5180 to 5183 |
 
 The real site repositories live outside this repo (`Synx`, `therealwebpoc`, `morph-space`, `skalleaiLP`). The CMS reaches them only through GitHub pull requests.
 
@@ -39,7 +39,7 @@ npm run seed:skalle -w apps/api
 npm run seed:rtw -w apps/api
 ```
 
-Morph Space and Synx Tools content has no seed script yet: ask for a database dump, or export from the console that has it.
+Morph Space has one too: `npm run seed:morph -w apps/api` (the site's section types, five pages, header, footer and settings; `-- --dry` checks without writing). Synx Tools content has no seed script yet: ask for a database dump, or export from the console that has it.
 
 ## Secrets
 

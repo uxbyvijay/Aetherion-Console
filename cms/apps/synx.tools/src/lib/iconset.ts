@@ -1,6 +1,6 @@
 /**
  * The built-in icons an editor can pick (24×24, drawn with a 1.5 line). An icon field stores "icon:<name>" for one of
- * these, or the address of an uploaded image. Keep this file identical in apps/admin and apps/morph-space.
+ * these, or the address of an uploaded image. Keep this file identical in apps/admin and apps/morph.space.
  */
 export const ICON_PATHS: Record<string, string[]> = {
   lock: ['M7 10.5h10a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-5.5a2 2 0 0 1 2-2z', 'M8 10.5V8a4 4 0 0 1 8 0v2.5'],

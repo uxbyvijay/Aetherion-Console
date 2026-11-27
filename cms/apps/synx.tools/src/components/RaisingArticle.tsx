@@ -1,4 +1,5 @@
 import { Gloss } from "@/components/Gloss";
+import { NewsVideo } from "@/components/NewsVideo";
 import { RobotNote } from "@/components/RobotNote";
 import type { ArticleBlock, Mark } from "@/lib/article";
 
@@ -34,6 +35,9 @@ export function NewsEssay({ blocks }: { blocks: ArticleBlock[] }) {
         </figure>
       );
     }
+    if (block.type === "video") {
+      return <NewsVideo key={index} href={block.href} label={block.label} />;
+    }
     if (block.type === "note") {
       return (
         <RobotNote
@@ -46,9 +50,12 @@ export function NewsEssay({ blocks }: { blocks: ArticleBlock[] }) {
     }
     if (block.type === "h2") return <h2 key={index}>{block.text}</h2>;
     if (block.type === "h3") return <h3 key={index}>{block.text}</h3>;
+    const body = renderMarked(block.text, block.marks);
     return (
       <p key={index} className={block.tone ? `news-${block.tone}` : undefined}>
-        {renderMarked(block.text, block.marks)}
+        {block.href ? (
+          <a href={block.href} target="_blank" rel="noreferrer">{body}</a>
+        ) : body}
       </p>
     );
   });

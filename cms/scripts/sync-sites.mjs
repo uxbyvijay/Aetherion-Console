@@ -23,10 +23,10 @@ const cms = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ORG = 'https://github.com/Synx-Tools';
 const cache = join(cms, '.sync-cache'); // read-only copies of the four repositories, fetched from GitHub (not your own clones)
 const SITES = {
-  rtw: { repo: 'therealwebpoc', app: 'apps/rtw' },
-  'synx-tools': { repo: 'Synx', app: 'apps/synx-tools' },
-  skalle: { repo: 'skalleaiLP', app: 'apps/skalle' },
-  'morph-space': { repo: 'morph-space', app: 'apps/morph-space' },
+  rtw: { repo: 'therealwebpoc', app: 'apps/realtimeweb.org' },
+  'synx-tools': { repo: 'Synx', app: 'apps/synx.tools' },
+  skalle: { repo: 'skalleaiLP', app: 'apps/skalle.ai' },
+  'morph-space': { repo: 'morph-space', app: 'apps/morph.space' },
 };
 const args = process.argv.slice(2);
 const apply = args.includes('--apply');

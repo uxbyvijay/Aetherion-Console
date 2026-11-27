@@ -84,19 +84,24 @@ window.addEventListener('synx:preview', (e) => {
 
 The script is served by the CMS at `/sdk/visual-editing.js`. It does nothing outside the CMS preview frame. Edit paths are `<target>.<field>`, where target is `page` or a section `_key`, and items of a list field add `.<index>.<subfield>`.
 
-## Morph Space site (`apps/morph-space`)
+## Morph Space site (`apps/morph.space`)
 
-The Morph Space website, copied from the design project and connected to this CMS. Its pages are built from the sections kept in the **Morph Space** site here (Home, How it works, Features, Pricing, Contact, plus Header, Footer and Website Settings).
+The Morph Space website (the cinematic design in `Desktop/Project/New/morph-ui-designs`, with Motion, Lenis and Lucide), connected to this CMS. Its pages are built from the sections kept in the **Morph Space** site here (Home, How it works, Features, Pricing, Contact, plus Header, Footer and Website Settings).
 
 ```bash
-cp apps/morph-space/.env.example apps/morph-space/.env.local   # then paste the site's delivery key (Settings)
+cp apps/morph.space/.env.example apps/morph.space/.env.local   # then paste the site's delivery key (Settings)
+npm run seed:morph -w apps/api                                 # structure and content (the API must be running)
 npm run dev:site                                               # http://localhost:5180
 ```
 
+- **Seed:** `npm run seed:morph -w apps/api` writes the section types, the five pages, the header, footer and settings, and uploads the pictures, all read from the site's own text (`apps/morph.space/src/lib/content.ts`). Run it again to put the pages back to that text (it replaces edits made on those pages). `-- --dry` checks everything against the CMS rules without writing; `-- --dump=<file>` also saves the documents as JSON.
+- **Sections** (a page is an ordered list of these): `home-hero`, `page-hero`, `scroll-words`, `pinned-steps`, `statement-media`, `reel`, `feature-list`, `ownership`, `link-cards`, `plans`, `contact-form`, `gateway`, `faq`, `cta-band`. The names an older version of the site used (`walkthrough`, `statement`, `chapter`, `feature-tour`) still show, in the new look, until a page is re-seeded.
 - Set the site's **Preview URL** (Settings) to `http://localhost:5180` and it opens in **Live preview** with click-to-edit.
 - If the CMS is off or the key is missing, every page shows the text built into the site (the `defaults` in each page file).
-- Animated demo panels and the hero video stay in the site's code; the CMS controls their text and which picture a block shows.
+- Pictures: each block's picture is a CMS field; with none set, the site's own photos in `public/images` show. A hero can also take a background picture or a looping video; with neither, the sharp city photo shows.
+- Prices are in US dollars; visitors pick another currency on the pricing page (live rates, remembered in their browser).
 - Extra fields on the contact form (company, website, resume upload) stay in `src/lib/content.ts`.
+- `public/video/city-*.mp4` are no longer used by default (the hero is a photo now); they are kept in case a page picks a video.
 
 ## AI assistant (Live preview › AI assistant)
 
@@ -144,4 +149,4 @@ Tools: `get_site`, `list_documents`, `get_document`, `create_draft_copy`, `creat
 
 ## Synx Tools site
 
-`apps/synx-tools` is the Synx Tools website (port 5181), the design of the Synx project rebuilt as a React app that reads all its pages, header, footer, articles and team from this CMS (site "Synx Tools"). `npm run dev` starts it with the others, or `npm run dev:synx` on its own. It needs `apps/synx-tools/.env.local` with `VITE_CMS_URL` and the site delivery key (`VITE_CMS_KEY`, see Settings), and the site's Preview URL set to `http://localhost:5181` for Live preview and click to edit. See `apps/synx-tools/AGENTS.md`.
+`apps/synx.tools` is the Synx Tools website (port 5181), the design of the Synx project rebuilt as a React app that reads all its pages, header, footer, articles and team from this CMS (site "Synx Tools"). `npm run dev` starts it with the others, or `npm run dev:synx` on its own. It needs `apps/synx.tools/.env.local` with `VITE_CMS_URL` and the site delivery key (`VITE_CMS_KEY`, see Settings), and the site's Preview URL set to `http://localhost:5181` for Live preview and click to edit. See `apps/synx.tools/AGENTS.md`.
