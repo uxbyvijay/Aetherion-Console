@@ -11,6 +11,7 @@
     "gateway": "tsx src/gateway.ts",
     "seed:skalle": "tsx seed/skalle-seed.ts",
     "seed:rtw": "tsx seed/rtw-seed.ts",
+    "seed:morph": "tsx seed/morph-seed.ts",
     "set-password": "tsx seed/set-password.ts"
   },
   "dependencies": {
