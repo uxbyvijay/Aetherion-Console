@@ -27,7 +27,7 @@ function change(now: number, before?: number | null): { text: string; dir: 'up' 
   return { text: `${p > 0 ? '+' : ''}${p}%`, dir: p > 0 ? 'up' : p < 0 ? 'down' : 'flat' };
 }
 const Delta = ({ c, days }: { c: ReturnType<typeof change>; days: number }) => c
-  ? <span className={`an-delta${c.dir === 'flat' ? ' flat' : ''}`}>{c.dir !== 'flat' && <span aria-hidden>{c.dir === 'up' ? '▲' : '▼'} </span>}{c.text}<span className="muted"> vs the previous {days} days</span></span>
+  ? <span className={`an-delta ${c.dir}`}>{c.dir !== 'flat' && <span aria-hidden>{c.dir === 'up' ? '▲' : '▼'} </span>}{c.text}<span className="muted"> vs the previous {days} days</span></span>
   : <span className="an-delta muted">No earlier period to compare with</span>;
 
 /** A tick step that gives 3 to 5 round gridlines. */
@@ -71,7 +71,13 @@ function Trend({ data, metric, label }: { data: { date: string; visitors: number
           </g>
         ))}
         {labelAt.map((i) => <text key={i} x={x(i)} y={H - 8} textAnchor={i === 0 ? 'start' : i === data.length - 1 ? 'end' : 'middle'} className="an-tick">{shortDate(data[i].date)}</text>)}
-        {area && <path d={area} className="an-area" />}
+        <defs>
+          <linearGradient id="an-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="var(--accent)" stopOpacity=".28" />
+            <stop offset="1" stopColor="var(--accent)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {area && <path d={area} fill="url(#an-fill)" />}
         {line && <path d={line} className="an-line" />}
         {h && hover != null && (
           <g>
@@ -101,8 +107,7 @@ function Ranked({ title, rows, empty }: { title: string; rows: Row[]; empty: str
         <ol className="an-ranked">
           {rows.map((r) => (
             <li key={r.label}>
-              <span className="an-name" title={r.label}>{r.label}</span>
-              <span className="an-bar"><i style={{ width: `${Math.max(2, (r.value / max) * 100)}%` }} /></span>
+              <span className="an-bar" style={{ ['--w' as string]: `${Math.max(2, (r.value / max) * 100)}%` }}><i /><span className="an-name" title={r.label}>{r.label}</span></span>
               <span className="an-num">{n0(r.value)}</span>
             </li>
           ))}
@@ -213,9 +218,9 @@ function SiteView({ site, days, onChanged }: { site: Site; days: number; onChang
   }
 
   const t = report?.totals; const pv = report?.previous;
-  const tiles: { label: string; value: string; delta?: ReturnType<typeof change> }[] = t ? [
-    { label: 'Visitors', value: n0(t.visitors), delta: change(t.visitors, pv?.visitors) },
-    { label: 'Page views', value: n0(t.pageviews), delta: change(t.pageviews, pv?.pageviews) },
+  const tiles: { key?: 'visitors' | 'pageviews'; label: string; value: string; delta?: ReturnType<typeof change> }[] = t ? [
+    { key: 'visitors', label: 'Visitors', value: n0(t.visitors), delta: change(t.visitors, pv?.visitors) },
+    { key: 'pageviews', label: 'Page views', value: n0(t.pageviews), delta: change(t.pageviews, pv?.pageviews) },
     ...(t.bounceRate != null ? [{ label: 'Bounce rate', value: `${Math.round(t.bounceRate)}%` }] : []),
     ...(t.visitDuration != null ? [{ label: 'Visit duration', value: clock(t.visitDuration) }] : []),
   ] : [];
@@ -260,45 +265,47 @@ function SiteView({ site, days, onChanged }: { site: Site; days: number; onChang
       {loading && !report && <p className="muted">Loading the numbers…</p>}
       {report && (
         <>
-          <div className="an-stats">
-            {tiles.map((x) => (
-              <div key={x.label} className="an-stat">
-                <span className="an-stat-label">{x.label}</span>
-                <b>{x.value}</b>
-                {x.delta !== undefined && <Delta c={x.delta} days={report.days} />}
-              </div>
-            ))}
-          </div>
-
-          {empty ? (
-            <section className="an-card an-none">
-              <h3>No visits recorded yet</h3>
-              <p className="muted">Google has not received any visits for this website in the last {report.days} days. Numbers appear here once the website is live with the tracking code, and Google can take up to 48 hours to show the first ones.</p>
-            </section>
-          ) : (
-            <>
-              <section className="an-card">
-                <div className="an-card-head">
-                  <h3>{metric === 'visitors' ? 'Visitors' : 'Page views'} per day</h3>
-                  <Seg label="Measure" value={metric} onChange={setMetric} options={[{ v: 'visitors', t: 'Visitors' }, { v: 'pageviews', t: 'Page views' }]} />
+          <section className={`an-card an-main${empty ? ' is-empty' : ''}`}>
+            <div className="an-stats" role="tablist" aria-label="Measure">
+              {tiles.map((x) => {
+                const pick = x.key;
+                const body = (
+                  <>
+                    <span className="an-stat-label">{x.label}</span>
+                    <b>{x.value}</b>
+                    {x.delta !== undefined && <Delta c={x.delta} days={report.days} />}
+                  </>
+                );
+                return pick
+                  ? <button key={x.label} type="button" role="tab" aria-selected={metric === pick} className={`an-stat pick${metric === pick ? ' on' : ''}`} onClick={() => setMetric(pick)}>{body}</button>
+                  : <div key={x.label} className="an-stat">{body}</div>;
+              })}
+            </div>
+            <div className="an-plot">
+              <Trend data={report.series} metric={metric} label={metric === 'visitors' ? 'Visitors' : 'Page views'} />
+              {empty && (
+                <div className="an-ghost">
+                  <b>No visits recorded yet</b>
+                  <p>Numbers appear once the website is live with the tracking code. Google can take up to 48 hours to show the first ones.</p>
                 </div>
-                <Trend data={report.series} metric={metric} label={metric === 'visitors' ? 'Visitors' : 'Page views'} />
-                <details className="more an-table">
-                  <summary>Show as a table</summary>
-                  <div className="dt-wrap">
-                    <table className="data-table"><thead><tr><th>Day</th><th>Visitors</th><th>Page views</th></tr></thead>
-                      <tbody>{[...report.series].reverse().map((d) => <tr key={d.date}><td>{longDate(d.date)}</td><td>{n0(d.visitors)}</td><td>{n0(d.pageviews)}</td></tr>)}</tbody></table>
-                  </div>
-                </details>
-              </section>
-              <div className="an-grid2">
-                <Ranked title="Top pages" rows={report.pages} empty="No page views in this period." />
-                <Ranked title="Where visitors come from" rows={report.sources} empty="No visits in this period." />
-                <Ranked title="Countries" rows={report.countries} empty="No visits in this period." />
-                <Ranked title="Devices" rows={report.devices} empty="No visits in this period." />
-              </div>
-            </>
-          )}
+              )}
+            </div>
+            {!empty && (
+              <details className="more an-table">
+                <summary>Show as a table</summary>
+                <div className="dt-wrap">
+                  <table className="data-table"><thead><tr><th>Day</th><th>Visitors</th><th>Page views</th></tr></thead>
+                    <tbody>{[...report.series].reverse().map((d) => <tr key={d.date}><td>{longDate(d.date)}</td><td>{n0(d.visitors)}</td><td>{n0(d.pageviews)}</td></tr>)}</tbody></table>
+                </div>
+              </details>
+            )}
+          </section>
+          <div className="an-grid2">
+            <Ranked title="Top pages" rows={report.pages} empty="Nothing yet" />
+            <Ranked title="Where visitors come from" rows={report.sources} empty="Nothing yet" />
+            <Ranked title="Countries" rows={report.countries} empty="Nothing yet" />
+            <Ranked title="Devices" rows={report.devices} empty="Nothing yet" />
+          </div>
         </>
       )}
     </>
@@ -326,16 +333,16 @@ function SiteList({ days, activeId, onPick, tick }: { days: number; activeId: st
               <button type="button" className={r.siteId === activeId ? 'on' : ''} aria-current={r.siteId === activeId ? 'true' : undefined} onClick={() => onPick(r.siteId)}>
                 {r.connected && r.totals ? (
                   <>
-                    <span className="an-li-row"><span className="an-li-name">{r.domain ?? r.name}</span><b className="an-li-num">{n0(r.totals.visitors)}</b></span>
+                    <span className="an-li-row"><span className="an-li-id"><i className="an-li-av" aria-hidden>{(r.domain ?? r.name).charAt(0)}</i><span className="an-li-name">{r.domain ?? r.name}</span></span><b className="an-li-num">{n0(r.totals.visitors)}</b></span>
                     <span className="an-li-foot">
                       {r.totals.visitors === 0 && !(r.previous?.visitors) ? <span className="muted">No visits yet</span>
-                        : c ? <span className={`an-delta${c.dir === 'flat' ? ' flat' : ''}`}>{c.dir !== 'flat' && <span aria-hidden>{c.dir === 'up' ? '▲' : '▼'} </span>}{c.text}</span> : <span className="muted">No earlier period</span>}
+                        : c ? <span className={`an-delta ${c.dir}`}>{c.dir !== 'flat' && <span aria-hidden>{c.dir === 'up' ? '▲' : '▼'} </span>}{c.text}</span> : <span className="muted">No earlier period</span>}
                       {(r.series ?? []).some((x) => x.visitors > 0) && <Spark values={(r.series ?? []).map((x) => x.visitors)} />}
                     </span>
                   </>
                 ) : (
                   <>
-                    <span className="an-li-row"><span className="an-li-name">{r.domain ?? r.name}</span></span>
+                    <span className="an-li-row"><span className="an-li-id"><i className="an-li-av" aria-hidden>{(r.domain ?? r.name).charAt(0)}</i><span className="an-li-name">{r.domain ?? r.name}</span></span></span>
                     <span className="an-li-note muted">{r.connected ? (r.error ?? 'Could not load the numbers.') : 'Not connected yet'}</span>
                   </>
                 )}
