@@ -1,0 +1,279 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+enum EntryStatus {
+  DRAFT
+  PUBLISHED
+}
+
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  name         String
+  passwordHash String
+  isSuperAdmin Boolean      @default(false)
+  /// Access to every website in the CMS (including ones added later) with this role; sites can also be granted one by one through memberships.
+  allSitesRole Role?
+  /// Set when an admin made the password (a temporary one): the person must choose their own at first sign-in.
+  mustChangePassword Boolean @default(false)
+  /// The password an admin set, encrypted, so admins can show it again. Deleted when the person chooses their own.
+  passwordCopy String?
+  memberships  Membership[]
+  createdAt    DateTime     @default(now())
+}
+
+model Site {
+  id           String        @id @default(cuid())
+  name         String
+  slug         String        @unique
+  domains      String[]
+  previewUrl   String?
+  /// Hosting record (information only): DNS name, server name, port and IP address
+  dnsName      String?
+  serverName   String?
+  serverPort   Int?
+  serverIp     String?
+  apiKey       String        @unique
+  memberships  Membership[]
+  contentTypes ContentType[]
+  entries      Entry[]
+  media        Media[]
+  connectors   Connector[]
+  mcpKeys      McpKey[]
+  githubLink   GithubLink?
+  analyticsLink AnalyticsLink?
+  publishes    PublishRecord[]
+  createdAt    DateTime      @default(now())
+}
+
+model Membership {
+  userId String
+  siteId String
+  role   Role   @default(EDITOR)
+  /// Send this person an email when someone else adds or changes something on the site.
+  notifyEmail Boolean @default(true)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  site   Site   @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@id([userId, siteId])
+}
+
+model ContentType {
+  id        String   @id @default(cuid())
+  siteId    String
+  name      String
+  slug      String
+  fields    Json     @default("[]")
+  kind      String   @default("collection")
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  entries   Entry[]
+  createdAt DateTime @default(now())
+
+  @@unique([siteId, slug])
+}
+
+model Entry {
+  id            String      @id @default(cuid())
+  siteId        String
+  contentTypeId String
+  slug          String?
+  data          Json        @default("{}")
+  status        EntryStatus @default(DRAFT)
+  publishedAt   DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  site          Site        @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  contentType   ContentType @relation(fields: [contentTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([contentTypeId, slug])
+  @@index([siteId, status])
+}
+
+model Media {
+  id           String   @id @default(cuid())
+  siteId       String
+  filename     String
+  originalName String
+  mimeType     String
+  size         Int
+  site         Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+}
+
+/// A source the AI assistant may read from: an MCP server or a REST API. The token is stored encrypted.
+model Connector {
+  id          String   @id @default(cuid())
+  siteId      String
+  site        Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  kind        String // "mcp" | "api"
+  name        String
+  url         String
+  description String   @default("")
+  /// header the token is sent in (APIs); empty = Authorization: Bearer
+  tokenHeader String   @default("")
+  tokenEnc    String?
+  allowWrites Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@unique([siteId, name])
+}
+
+/// A key that lets one AI tool (Claude, ChatGPT/Codex, Gemini, Cursor...) use the CMS through MCP. One key per tool, so one
+/// can be removed without affecting the others. siteId empty = the key reaches every site.
+model McpKey {
+  id        String   @id @default(cuid())
+  siteId    String?
+  site      Site?    @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  /// which AI tool it is for: claude-code, claude-desktop, codex, gemini, cursor, vscode, windsurf, other
+  tool      String   @default("other")
+  label     String
+  /// SHA-256 of the key, used to check requests
+  hash      String   @unique
+  /// the key itself, encrypted, so it can be shown again (empty for keys made before this existed)
+  keyEnc    String?
+  /// read | draft | publish
+  perm      String   @default("draft")
+  last4     String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([siteId])
+}
+
+/// One saved copy of a document, written every time it is created, changed, published or deleted. Kept after the document is deleted.
+model EntryVersion {
+  id        String   @id @default(cuid())
+  entryId   String
+  siteId    String
+  typeName  String
+  title     String
+  slug      String?
+  data      Json
+  status    String
+  /// created | edited | published | unpublished | deleted | restored
+  action    String
+  summary   String   @default("")
+  actorId   String?
+  actorName String
+  /// cms | ai
+  source    String   @default("cms")
+  createdAt DateTime @default(now())
+
+  @@index([entryId, createdAt])
+  @@index([siteId, createdAt])
+}
+
+/// "Someone changed something": shown in the bell, and mailed to the site's members.
+model Notification {
+  id        String    @id @default(cuid())
+  siteId    String
+  entryId   String?
+  action    String
+  title     String
+  summary   String    @default("")
+  actorId   String?
+  actorName String
+  source    String    @default("cms")
+  emailedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([siteId, createdAt])
+  @@index([emailedAt])
+}
+
+/// A 6-digit code emailed to someone who forgot their password (kept only as a hash, valid for 15 minutes).
+model PasswordReset {
+  id        String   @id @default(cuid())
+  userId    String
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+/// A note for admins when someone's password is reset or changed (shown in the bell for admins only).
+model AccountNotice {
+  id          String   @id @default(cuid())
+  /// reset-by-code | changed-by-user | reset-by-admin
+  kind        String
+  targetName  String
+  targetEmail String
+  actorName   String
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+/// The GitHub repository a website publishes to. The access token is never stored: it lives in the server environment.
+model GithubLink {
+  siteId      String   @id
+  site        Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  owner       String
+  repo        String
+  baseBranch  String   @default("main")
+  /// the only folder of the repository the console may write to
+  contentDir  String   @default("content")
+  connectedBy String
+  createdAt   DateTime @default(now())
+}
+
+/// Who did what in the console: admin actions and GitHub operations. Never holds secrets.
+model AuditLog {
+  id        String   @id @default(cuid())
+  siteId    String?
+  actorId   String?
+  actorName String
+  action    String
+  detail    String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([siteId, createdAt])
+}
+
+/// A pull request the console opened for a website. Its review status is read from GitHub, never stored.
+model PublishRecord {
+  id         String   @id @default(cuid())
+  siteId     String
+  site       Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  owner      String
+  repo       String
+  baseBranch String
+  branch     String
+  prNumber   Int
+  prUrl      String
+  title      String
+  /// [{ path, status }] of the files in the pull request
+  files      Json     @default("[]")
+  createdBy  String
+  createdAt  DateTime @default(now())
+
+  @@index([siteId, createdAt])
+}
+
+/// Where a website's visitor numbers come from (Google Analytics 4). The service account file is stored encrypted and never leaves the server.
+model AnalyticsLink {
+  siteId      String   @id
+  site        Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  /// always ga4 (kept as a column so another source could be added later)
+  provider    String
+  /// not secret: { propertyId }
+  settings    Json     @default("{}")
+  /// the GA4 service account file, encrypted
+  secretEnc   String?
+  connectedBy String
+  createdAt   DateTime @default(now())
+}

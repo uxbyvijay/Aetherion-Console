@@ -1,0 +1,78 @@
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import { Role } from '@prisma/client';
+import { prisma } from './db.js';
+
+declare module '@fastify/jwt' {
+  interface FastifyJWT {
+    payload: { sub: string };
+    user: { sub: string };
+  }
+}
+
+// Local development only: AUTH_DISABLED=true skips sign-in and acts as a built-in super admin.
+// server.ts refuses to start with this on unless the API is bound to localhost.
+export const authDisabled = process.env.AUTH_DISABLED === 'true';
+let devUserId: string | undefined;
+/** The name shown for the built-in user while sign-in is off. Set DEV_USER_NAME in .env to change it. */
+const devName = process.env.DEV_USER_NAME?.trim() || 'Local admin';
+async function devUser() {
+  if (devUserId) return devUserId;
+  const u = await prisma.user.upsert({
+    where: { email: 'local-admin@localhost' },
+    update: { isSuperAdmin: true, name: devName },
+    create: { email: 'local-admin@localhost', name: devName, isSuperAdmin: true, passwordHash: '!' },
+  });
+  return (devUserId = u.id);
+}
+
+const rank: Record<Role, number> = { VIEWER: 1, EDITOR: 2, ADMIN: 3 };
+
+export async function authenticate(req: FastifyRequest, reply: FastifyReply) {
+  if (authDisabled) {
+    req.user = { sub: await devUser() };
+    return;
+  }
+  try {
+    await req.jwtVerify();
+  } catch {
+    return reply.code(401).send({ error: 'Unauthorized' });
+  }
+}
+
+/** Requires a logged-in user with at least `min` role on :siteId (super admins pass). */
+export function requireSite(min: Role) {
+  return async (req: FastifyRequest, reply: FastifyReply) => {
+    await authenticate(req, reply);
+    if (reply.sent) return;
+    const { siteId } = req.params as { siteId: string };
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.sub },
+      include: { memberships: { where: { siteId } } },
+    });
+    if (!user) return reply.code(401).send({ error: 'Unauthorized' });
+    if (user.mustChangePassword) return reply.code(403).send({ error: 'Choose a new password first.', code: 'password' });
+    if (user.isSuperAdmin) return;
+    // the better of the role on this site and the role on every site
+    const best = Math.max(user.memberships[0] ? rank[user.memberships[0].role] : 0, user.allSitesRole ? rank[user.allSitesRole] : 0);
+    if (best < rank[min]) return reply.code(403).send({ error: 'Forbidden' });
+  };
+}
+
+export async function requireSuperAdmin(req: FastifyRequest, reply: FastifyReply) {
+  await authenticate(req, reply);
+  if (reply.sent) return;
+  const user = await prisma.user.findUnique({ where: { id: req.user.sub } });
+  if (user?.mustChangePassword) return reply.code(403).send({ error: 'Choose a new password first.', code: 'password' });
+  if (!user?.isSuperAdmin) return reply.code(403).send({ error: 'Super admin only' });
+}
+
+/** An admin, or someone who is an editor (or better) on every site. Used for things that reach all sites. */
+export async function requireAllSitesEditor(req: FastifyRequest, reply: FastifyReply) {
+  await authenticate(req, reply);
+  if (reply.sent) return;
+  const user = await prisma.user.findUnique({ where: { id: req.user.sub } });
+  if (user?.mustChangePassword) return reply.code(403).send({ error: 'Choose a new password first.', code: 'password' });
+  if (!user) return reply.code(401).send({ error: 'Unauthorized' });
+  if (user.isSuperAdmin) return;
+  if (!user.allSitesRole || rank[user.allSitesRole] < rank.EDITOR) return reply.code(403).send({ error: 'Forbidden' });
+}

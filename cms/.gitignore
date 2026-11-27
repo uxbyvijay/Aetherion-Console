@@ -1,0 +1,7 @@
+node_modules
+dist
+.env
+uploads
+
+# read-only copies of the site repositories used by npm run sync:sites
+.sync-cache/
